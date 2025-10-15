@@ -212,15 +212,17 @@ const Dashboard = () => {
   useEffect(() => {
     // Redirect users to their appropriate dashboards
     if (user?.role === 'hotel_owner') {
-      navigate('/hotel-owner/dashboard', { replace: true })
+      navigate('/hotel-owner', { replace: true })
     } else if (user?.role === 'admin') {
       navigate('/admin', { replace: true })
     } else if (user?.role === 'guide') {
-      navigate('/guide/dashboard', { replace: true })
+      navigate('/guide', { replace: true })
     } else if (user?.role === 'driver') {
-      navigate('/driver/dashboard', { replace: true })
+      navigate('/driver', { replace: true })
     } else if (user?.role === 'staff') {
       navigate('/staff', { replace: true })
+    } else if (user?.role === 'vehicle_owner') {
+      navigate('/vehicle-owner', { replace: true })
     }
   }, [user, navigate])
   
