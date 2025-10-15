@@ -205,58 +205,59 @@ app.use(errorHandler);
 // Database connection
 const connectDB = async () => {
   try {
-    // Try local MongoDB first
-    const localMongoUri = 'mongodb://localhost:27017/serendibgo';
-    console.log('Attempting to connect to local MongoDB...');
+    // Try Atlas MongoDB first (prioritize cloud over local)
+    const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://asbthanayamwatta2_db_user:a9tYLTCwJCXc0xjX@cluster0.gv7sbeb.mongodb.net/serendibgo?retryWrites=true&w=majority&appName=Cluster0';
+    console.log('Attempting to connect to MongoDB Atlas...');
+    console.log('MONGODB_URI:', mongoUri);
     
-    const conn = await mongoose.connect(localMongoUri, {
+    const conn = await mongoose.connect(mongoUri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 5000, // Timeout after 5s
-      socketTimeoutMS: 45000,
-      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 10000, // Timeout after 10s
+      socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+      maxPoolSize: 10, // Maintain up to 10 socket connections
+      retryWrites: true,
+      w: 'majority'
     });
-    console.log(`✅ MongoDB Connected (Local): ${conn.connection.host}`);
+    console.log(`✅ MongoDB Connected (Atlas): ${conn.connection.host}`);
     return conn;
-  } catch (localError) {
-    console.log('Local MongoDB not available, trying Atlas...');
+  } catch (atlasError) {
+    console.error('Atlas connection failed:', atlasError.message);
     
+    // Try alternative connection method if SRV fails
+    if (atlasError.code === 'ENOTFOUND' && process.env.MONGODB_URI && process.env.MONGODB_URI.includes('mongodb+srv://')) {
+      console.log('SRV record failed, trying alternative connection...');
+      try {
+        // Convert SRV URI to standard format
+        const altUri = process.env.MONGODB_URI.replace('mongodb+srv://', 'mongodb://');
+        const conn = await mongoose.connect(altUri, {
+          useNewUrlParser: true,
+          useUnifiedTopology: true,
+          serverSelectionTimeoutMS: 10000,
+          socketTimeoutMS: 45000,
+        });
+        console.log(`✅ MongoDB Connected (alternative): ${conn.connection.host}`);
+        return conn;
+      } catch (altError) {
+        console.error('Alternative connection also failed:', altError.message);
+      }
+    }
+    
+    // Fallback to local MongoDB if Atlas fails
+    console.log('Atlas not available, trying local MongoDB...');
     try {
-      const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://asbthanayamwatta2_db_user:a9tYLTCwJCXc0xjX@cluster0.gv7sbeb.mongodb.net/serendibgo?retryWrites=true&w=majority&appName=Cluster0';
-      console.log('MONGODB_URI:', mongoUri);
-      
-      const conn = await mongoose.connect(mongoUri, {
+      const localMongoUri = 'mongodb://localhost:27017/serendibgo';
+      const conn = await mongoose.connect(localMongoUri, {
         useNewUrlParser: true,
         useUnifiedTopology: true,
-        serverSelectionTimeoutMS: 10000, // Timeout after 10s
-        socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
-        maxPoolSize: 10, // Maintain up to 10 socket connections
-        retryWrites: true,
-        w: 'majority'
+        serverSelectionTimeoutMS: 5000, // Timeout after 5s
+        socketTimeoutMS: 45000,
+        maxPoolSize: 10,
       });
-      console.log(`✅ MongoDB Connected (Atlas): ${conn.connection.host}`);
+      console.log(`✅ MongoDB Connected (Local): ${conn.connection.host}`);
       return conn;
-    } catch (atlasError) {
-      console.error('Atlas connection failed:', atlasError.message);
-      
-      // Try alternative connection method if SRV fails
-      if (atlasError.code === 'ENOTFOUND' && process.env.MONGODB_URI && process.env.MONGODB_URI.includes('mongodb+srv://')) {
-        console.log('SRV record failed, trying alternative connection...');
-        try {
-          // Convert SRV URI to standard format
-          const altUri = process.env.MONGODB_URI.replace('mongodb+srv://', 'mongodb://');
-          const conn = await mongoose.connect(altUri, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 10000,
-            socketTimeoutMS: 45000,
-          });
-          console.log(`✅ MongoDB Connected (alternative): ${conn.connection.host}`);
-          return conn;
-        } catch (altError) {
-          console.error('Alternative connection also failed:', altError.message);
-        }
-      }
+    } catch (localError) {
+      console.error('Local MongoDB also failed:', localError.message);
       
       console.log('❌ All MongoDB connections failed. Starting server without database...');
       console.log('⚠️  Some features may not work without database connection.');
