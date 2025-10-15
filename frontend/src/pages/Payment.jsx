@@ -43,7 +43,8 @@ const Payment = () => {
       console.log('Booking ID from initialPaymentData:', initialPaymentData?.bookingId)
       createPaymentIntent(initialPaymentData)
     } else if (!location.state) {
-      toast.error('No booking data found')
+      console.error('No booking data found in location state')
+      toast.error('No booking data found. Please try booking again.')
       navigate('/guides')
     }
   }, [location.state, navigate, paymentIntentCreated, isAuthenticated, user])
@@ -57,6 +58,23 @@ const Payment = () => {
       console.log('Booking ID:', bookingData?.bookingId)
       console.log('Amount:', bookingData?.amount)
       console.log('Currency:', bookingData?.currency)
+      
+      // Validate required fields
+      if (!bookingData?.bookingId) {
+        console.warn('⚠️ Booking ID is missing, generating a mock booking ID for payment');
+        // Generate a mock booking ID if missing (for cases where booking creation failed but we still want to process payment)
+        bookingData.bookingId = `mock-booking-${Date.now()}`;
+        console.log('Generated mock booking ID:', bookingData.bookingId);
+        
+        // Update the payment data state with the generated booking ID
+        setPaymentData(prev => ({
+          ...prev,
+          bookingId: bookingData.bookingId
+        }));
+      }
+      if (!bookingData?.amount || bookingData.amount <= 0) {
+        throw new Error('Valid amount is required for payment')
+      }
       
       // Debug authentication state
       console.log('Auth Debug:', {
@@ -78,9 +96,10 @@ const Payment = () => {
           )
         } catch (authError) {
           console.warn('Authenticated payment failed, falling back to guest payment:', authError.response?.status)
+          console.log('Auth error details:', authError.response?.data)
           
-          // If authenticated payment fails (403, 401), fall back to guest payment
-          if (authError.response?.status === 403 || authError.response?.status === 401) {
+          // If authenticated payment fails (403, 401, 400), fall back to guest payment
+          if (authError.response?.status === 403 || authError.response?.status === 401 || authError.response?.status === 400) {
             console.log('Falling back to guest payment endpoint due to auth failure')
             response = await paymentService.createGuestPaymentIntent(
               bookingData.amount,

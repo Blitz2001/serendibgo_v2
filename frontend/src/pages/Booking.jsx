@@ -169,7 +169,7 @@ const Booking = () => {
       const response = await api.post('/vehicle-bookings', bookingData)
       
       if (response.data.status === 'success') {
-        const booking = response.data.data
+        const booking = response.data.data.booking || response.data.data
         const totalAmount = calculatePrice()
         
         console.log('=== VEHICLE BOOKING CREATED ===')
