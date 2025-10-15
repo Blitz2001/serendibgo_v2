@@ -11,6 +11,8 @@ const {
   getGuideStats
 } = require('../controllers/guideController');
 
+const { generateGuidePDFReport } = require('../controllers/guide/reportController');
+
 const router = express.Router();
 
 // @desc    Get all guides
@@ -47,5 +49,11 @@ router.delete('/:id', protect, asyncHandler(deleteGuide));
 // @route   GET /api/guides/stats/:id
 // @access  Public
 router.get('/stats/:id', asyncHandler(getGuideStats));
+
+// Report generation routes
+// @desc    Generate PDF report for guide
+// @route   POST /api/guides/reports/generate
+// @access  Private (Guide only)
+router.post('/reports/generate', protect, asyncHandler(generateGuidePDFReport));
 
 module.exports = router;

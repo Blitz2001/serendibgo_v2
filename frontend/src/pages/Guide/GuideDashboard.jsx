@@ -42,6 +42,8 @@ import {
 } from 'lucide-react'
 import { guideService } from '../../services/guideService'
 import { useAuth } from '../../context/AuthContext'
+import api from '../../services/api'
+import toast from 'react-hot-toast'
 
 const GuideDashboard = () => {
   const navigate = useNavigate()
@@ -969,6 +971,66 @@ const GuideDashboard = () => {
     }))
   }
 
+  // PDF Report generation
+  const handleGeneratePDFReport = async (reportType = 'overview', period = '30d') => {
+    try {
+      toast.loading('Generating PDF report...', { id: 'pdf-report' });
+      
+      const response = await api.post('/guides/reports/generate', {
+        reportType,
+        period
+      });
+
+      if (response.data.success && response.data.data) {
+        console.log('Response data type:', typeof response.data.data);
+        console.log('Response data length:', response.data.data.length);
+        console.log('First 100 chars:', response.data.data.substring(0, 100));
+        
+        try {
+          // Convert base64 to blob using a more robust method
+          const base64Data = response.data.data;
+          
+          // Remove any whitespace or newlines
+          const cleanBase64 = base64Data.replace(/\s/g, '');
+          
+          // Convert base64 to binary string
+          const binaryString = atob(cleanBase64);
+          
+          // Convert binary string to Uint8Array
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          // Create blob
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          
+          console.log('Blob created successfully, size:', blob.size);
+          
+          // Create download link
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = response.data.filename || `guide-report-${new Date().toISOString().split('T')[0]}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+
+          toast.success('PDF report generated successfully!', { id: 'pdf-report' });
+        } catch (decodeError) {
+          console.error('Error decoding base64 data:', decodeError);
+          throw new Error('Failed to decode PDF data: ' + decodeError.message);
+        }
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error generating PDF report:', error);
+      toast.error('Failed to generate PDF report', { id: 'pdf-report' });
+    }
+  };
+
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Home },
     { id: 'bookings', label: 'Bookings', icon: Calendar },
@@ -1147,8 +1209,17 @@ const GuideDashboard = () => {
                         Ready to show tourists the beauty of Sri Lanka?
                       </p>
                     </div>
-                    <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center">
-                      <User className="h-10 w-10 text-white" />
+                    <div className="flex items-center space-x-4">
+                      <button 
+                        onClick={() => handleGeneratePDFReport('overview', '30d')}
+                        className="flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors"
+                      >
+                        <FileText className="h-5 w-5 mr-2" />
+                        Generate Report
+                      </button>
+                      <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center">
+                        <User className="h-10 w-10 text-white" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2445,17 +2516,215 @@ const GuideDashboard = () => {
 
             {/* Statistics Tab */}
             {activeTab === 'stats' && (
-              <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
-                <div className="flex items-center mb-6">
-                  <BarChart3 className="h-6 w-6 text-blue-600 mr-3" />
-                  <h2 className="text-2xl font-bold text-slate-900">Statistics</h2>
+              <div className="space-y-8">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl shadow-lg p-8 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-3xl font-bold mb-2">Performance Analytics</h2>
+                      <p className="text-green-100 text-lg">
+                        Track your performance and generate detailed reports
+                      </p>
+                    </div>
+                    <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center">
+                      <BarChart3 className="h-10 w-10 text-white" />
+                    </div>
+                  </div>
                 </div>
-                <p className="text-slate-600 mb-8">View your performance and booking statistics.</p>
-                
-                <div className="text-center py-12">
-                  <BarChart3 className="h-16 w-16 text-slate-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-slate-700 mb-2">Performance Analytics</h3>
-                  <p className="text-slate-500">This feature will be available soon. You'll be able to view your booking statistics and performance metrics here.</p>
+
+                {/* Quick Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                        <Calendar className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <span className="text-2xl font-bold text-slate-900">{guideStats.activeBookings}</span>
+                    </div>
+                    <h3 className="font-semibold text-slate-900 mb-1">Total Bookings</h3>
+                    <p className="text-sm text-slate-600">All-time bookings</p>
+                  </div>
+
+                  <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                        <DollarSign className="h-6 w-6 text-green-600" />
+                      </div>
+                      <span className="text-2xl font-bold text-slate-900">LKR {guideStats.totalEarnings.toLocaleString()}</span>
+                    </div>
+                    <h3 className="font-semibold text-slate-900 mb-1">Total Earnings</h3>
+                    <p className="text-sm text-slate-600">All-time earnings</p>
+                  </div>
+
+                  <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
+                        <Star className="h-6 w-6 text-yellow-600" />
+                      </div>
+                      <span className="text-2xl font-bold text-slate-900">{guideStats.averageRating}</span>
+                    </div>
+                    <h3 className="font-semibold text-slate-900 mb-1">Average Rating</h3>
+                    <p className="text-sm text-slate-600">Customer satisfaction</p>
+                  </div>
+
+                  <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                        <TrendingUp className="h-6 w-6 text-purple-600" />
+                      </div>
+                      <span className="text-2xl font-bold text-slate-900">95%</span>
+                    </div>
+                    <h3 className="font-semibold text-slate-900 mb-1">Success Rate</h3>
+                    <p className="text-sm text-slate-600">Completed tours</p>
+                  </div>
+                </div>
+
+                {/* Report Generation Section */}
+                <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-2xl font-bold text-slate-900 mb-2">Generate Reports</h3>
+                      <p className="text-slate-600">Create detailed PDF reports of your performance and bookings</p>
+                    </div>
+                    <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center">
+                      <FileText className="h-8 w-8 text-green-600" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Overview Report */}
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
+                      <div className="flex items-center mb-4">
+                        <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center mr-4">
+                          <BarChart3 className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-slate-900">Overview Report</h4>
+                          <p className="text-sm text-slate-600">Complete performance summary</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleGeneratePDFReport('overview', '30d')}
+                        className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Generate Report
+                      </button>
+                    </div>
+
+                    {/* Bookings Report */}
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200">
+                      <div className="flex items-center mb-4">
+                        <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mr-4">
+                          <Calendar className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-slate-900">Bookings Report</h4>
+                          <p className="text-sm text-slate-600">Detailed booking analysis</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleGeneratePDFReport('bookings', '30d')}
+                        className="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Generate Report
+                      </button>
+                    </div>
+
+                    {/* Earnings Report */}
+                    <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-6 border border-yellow-200">
+                      <div className="flex items-center mb-4">
+                        <div className="w-12 h-12 bg-yellow-500 rounded-lg flex items-center justify-center mr-4">
+                          <DollarSign className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-slate-900">Earnings Report</h4>
+                          <p className="text-sm text-slate-600">Financial performance analysis</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleGeneratePDFReport('earnings', '30d')}
+                        className="w-full bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Generate Report
+                      </button>
+                    </div>
+
+                    {/* Reviews Report */}
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
+                      <div className="flex items-center mb-4">
+                        <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center mr-4">
+                          <Star className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-slate-900">Reviews Report</h4>
+                          <p className="text-sm text-slate-600">Customer feedback analysis</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleGeneratePDFReport('reviews', '30d')}
+                        className="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Generate Report
+                      </button>
+                    </div>
+
+                    {/* Performance Report */}
+                    <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-6 border border-indigo-200">
+                      <div className="flex items-center mb-4">
+                        <div className="w-12 h-12 bg-indigo-500 rounded-lg flex items-center justify-center mr-4">
+                          <TrendingUp className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-slate-900">Performance Report</h4>
+                          <p className="text-sm text-slate-600">Comprehensive performance metrics</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleGeneratePDFReport('performance', '30d')}
+                        className="w-full bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Generate Report
+                      </button>
+                    </div>
+
+                    {/* Custom Period Report */}
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-6 border border-gray-200">
+                      <div className="flex items-center mb-4">
+                        <div className="w-12 h-12 bg-gray-500 rounded-lg flex items-center justify-center mr-4">
+                          <Settings className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-slate-900">Custom Report</h4>
+                          <p className="text-sm text-slate-600">Choose your time period</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <button 
+                          onClick={() => handleGeneratePDFReport('overview', '7d')}
+                          className="w-full bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors"
+                        >
+                          7 Days
+                        </button>
+                        <button 
+                          onClick={() => handleGeneratePDFReport('overview', '90d')}
+                          className="w-full bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors"
+                        >
+                          90 Days
+                        </button>
+                        <button 
+                          onClick={() => handleGeneratePDFReport('overview', '1y')}
+                          className="w-full bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors"
+                        >
+                          1 Year
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

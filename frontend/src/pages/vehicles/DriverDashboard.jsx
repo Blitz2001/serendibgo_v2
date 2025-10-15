@@ -22,8 +22,10 @@ import {
   Phone,
   Mail,
   BarChart3,
-  Activity as ActivityIcon
+  Activity as ActivityIcon,
+  Download
 } from 'lucide-react';
+import api from '../../services/api';
 import toast from 'react-hot-toast';
 
 const DriverDashboard = () => {
@@ -267,6 +269,66 @@ const DriverDashboard = () => {
       currency: 'LKR'
     }).format(amount);
   };
+
+  // PDF Report generation
+  const handleGeneratePDFReport = async (reportType = 'overview', period = '30d') => {
+    try {
+      toast.loading('Generating PDF report...', { id: 'pdf-report' });
+      
+      const response = await api.post('/drivers/reports/generate', {
+        reportType,
+        period
+      });
+
+      if (response.data.success && response.data.data) {
+        console.log('Response data type:', typeof response.data.data);
+        console.log('Response data length:', response.data.data.length);
+        console.log('First 100 chars:', response.data.data.substring(0, 100));
+        
+        try {
+          // Convert base64 to blob using a more robust method
+          const base64Data = response.data.data;
+          
+          // Remove any whitespace or newlines
+          const cleanBase64 = base64Data.replace(/\s/g, '');
+          
+          // Convert base64 to binary string
+          const binaryString = atob(cleanBase64);
+          
+          // Convert binary string to Uint8Array
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          // Create blob
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          
+          console.log('Blob created successfully, size:', blob.size);
+          
+          // Create download link
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = response.data.filename || `driver-report-${new Date().toISOString().split('T')[0]}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+
+          toast.success('PDF report generated successfully!', { id: 'pdf-report' });
+        } catch (decodeError) {
+          console.error('Error decoding base64 data:', decodeError);
+          throw new Error('Failed to decode PDF data: ' + decodeError.message);
+        }
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error generating PDF report:', error);
+      toast.error('Failed to generate PDF report', { id: 'pdf-report' });
+    }
+  };
   
   if (loading) {
     return (
@@ -317,6 +379,13 @@ const DriverDashboard = () => {
               </div>
             </div>
             <div className="flex space-x-3">
+              <button
+                onClick={() => handleGeneratePDFReport('overview', '30d')}
+                className="btn btn-primary"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Generate Report
+              </button>
               <button
                 onClick={() => {
                   hasFetched.current = false;
@@ -486,6 +555,175 @@ const DriverDashboard = () => {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Report Generation Section */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center mb-2">
+                      <BarChart3 className="w-5 h-5 mr-2 text-green-600" />
+                      Generate Reports
+                    </h3>
+                    <p className="text-gray-600">Create comprehensive PDF reports for different aspects of your driving business</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Overview Report */}
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+                          <BarChart3 className="h-5 w-5 text-white" />
+                        </div>
+                        <span className="text-xs font-medium text-green-600">Overview</span>
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-2">Overview Report</h4>
+                      <p className="text-sm text-gray-600 mb-3">Complete performance summary with key metrics and trends</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('overview', '30d')}
+                          className="flex-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('overview', '90d')}
+                          className="flex-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Trips Report */}
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                          <Car className="h-5 w-5 text-white" />
+                        </div>
+                        <span className="text-xs font-medium text-blue-600">Trips</span>
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-2">Trips Report</h4>
+                      <p className="text-sm text-gray-600 mb-3">Detailed trip analysis and customer insights</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('trips', '30d')}
+                          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('trips', '90d')}
+                          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Earnings Report */}
+                    <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 border border-yellow-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="w-10 h-10 bg-yellow-500 rounded-lg flex items-center justify-center">
+                          <DollarSign className="h-5 w-5 text-white" />
+                        </div>
+                        <span className="text-xs font-medium text-yellow-600">Earnings</span>
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-2">Earnings Report</h4>
+                      <p className="text-sm text-gray-600 mb-3">Financial performance and earnings analysis</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('earnings', '30d')}
+                          className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('earnings', '90d')}
+                          className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Performance Report */}
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
+                          <ActivityIcon className="h-5 w-5 text-white" />
+                        </div>
+                        <span className="text-xs font-medium text-purple-600">Performance</span>
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-2">Performance Report</h4>
+                      <p className="text-sm text-gray-600 mb-3">Driver performance metrics and ratings</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('performance', '30d')}
+                          className="flex-1 bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('performance', '90d')}
+                          className="flex-1 bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Reviews Report */}
+                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
+                          <Star className="h-5 w-5 text-white" />
+                        </div>
+                        <span className="text-xs font-medium text-orange-600">Reviews</span>
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-2">Reviews Report</h4>
+                      <p className="text-sm text-gray-600 mb-3">Customer feedback and rating analysis</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('reviews', '30d')}
+                          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('reviews', '90d')}
+                          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Vehicles Report */}
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 border border-gray-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="w-10 h-10 bg-gray-500 rounded-lg flex items-center justify-center">
+                          <Car className="h-5 w-5 text-white" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-600">Vehicles</span>
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-2">Vehicles Report</h4>
+                      <p className="text-sm text-gray-600 mb-3">Vehicle performance and maintenance tracking</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('vehicles', '30d')}
+                          className="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('vehicles', '90d')}
+                          className="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>

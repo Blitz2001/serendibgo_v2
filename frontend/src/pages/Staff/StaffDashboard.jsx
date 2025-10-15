@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import staffService from '../../services/staff/staffService'
+import api from '../../services/api'
 import toast from 'react-hot-toast'
 import {
   User,
@@ -293,6 +294,66 @@ const StaffDashboard = () => {
     }
   }
 
+  // PDF Report generation
+  const handleGeneratePDFReport = async (reportType = 'overview', period = '30d') => {
+    try {
+      toast.loading('Generating PDF report...', { id: 'pdf-report' });
+      
+      const response = await api.post('/staff/reports/generate', {
+        reportType,
+        period
+      });
+
+      if (response.data.success && response.data.data) {
+        console.log('Response data type:', typeof response.data.data);
+        console.log('Response data length:', response.data.data.length);
+        console.log('First 100 chars:', response.data.data.substring(0, 100));
+        
+        try {
+          // Convert base64 to blob using a more robust method
+          const base64Data = response.data.data;
+          
+          // Remove any whitespace or newlines
+          const cleanBase64 = base64Data.replace(/\s/g, '');
+          
+          // Convert base64 to binary string
+          const binaryString = atob(cleanBase64);
+          
+          // Convert binary string to Uint8Array
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          // Create blob
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          
+          console.log('Blob created successfully, size:', blob.size);
+          
+          // Create download link
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = response.data.filename || `staff-report-${new Date().toISOString().split('T')[0]}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+
+          toast.success('PDF report generated successfully!', { id: 'pdf-report' });
+        } catch (decodeError) {
+          console.error('Error decoding base64 data:', decodeError);
+          throw new Error('Failed to decode PDF data: ' + decodeError.message);
+        }
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error generating PDF report:', error);
+      toast.error('Failed to generate PDF report', { id: 'pdf-report' });
+    }
+  };
+
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Home },
     { id: 'approvals', label: 'Approvals', icon: CheckCircle },
@@ -481,8 +542,17 @@ const StaffDashboard = () => {
                         Manage and oversee the SerendibGo platform operations
                       </p>
                     </div>
-                    <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center">
-                      <Shield className="h-10 w-10 text-white" />
+                    <div className="flex items-center space-x-4">
+                      <button
+                        onClick={() => handleGeneratePDFReport('overview', '30d')}
+                        className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        <span>Generate Report</span>
+                      </button>
+                      <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center">
+                        <Shield className="h-10 w-10 text-white" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -820,6 +890,172 @@ const StaffDashboard = () => {
                           <p className="text-slate-500">Chart will be implemented</p>
                           <p className="text-sm text-slate-400">User analytics coming soon</p>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Report Generation Section */}
+                <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
+                  <div className="mb-6">
+                    <h3 className="text-2xl font-bold text-slate-900 mb-2">Generate Reports</h3>
+                    <p className="text-slate-600">Create comprehensive PDF reports for different aspects of your operations</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Overview Report */}
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+                          <BarChart3 className="h-6 w-6 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-blue-600">Overview</span>
+                      </div>
+                      <h4 className="font-semibold text-slate-900 mb-2">Overview Report</h4>
+                      <p className="text-sm text-slate-600 mb-4">Complete performance summary with key metrics and trends</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('overview', '30d')}
+                          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('overview', '90d')}
+                          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Approvals Report */}
+                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-6 border border-orange-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center">
+                          <CheckCircle className="h-6 w-6 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-orange-600">Approvals</span>
+                      </div>
+                      <h4 className="font-semibold text-slate-900 mb-2">Approvals Report</h4>
+                      <p className="text-sm text-slate-600 mb-4">Detailed analysis of approval processes and processing times</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('approvals', '30d')}
+                          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('approvals', '90d')}
+                          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Bookings Report */}
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
+                          <Calendar className="h-6 w-6 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-green-600">Bookings</span>
+                      </div>
+                      <h4 className="font-semibold text-slate-900 mb-2">Bookings Report</h4>
+                      <p className="text-sm text-slate-600 mb-4">Comprehensive booking analysis and customer insights</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('bookings', '30d')}
+                          className="flex-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('bookings', '90d')}
+                          className="flex-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Financial Report */}
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center">
+                          <DollarSign className="h-6 w-6 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-purple-600">Financial</span>
+                      </div>
+                      <h4 className="font-semibold text-slate-900 mb-2">Financial Report</h4>
+                      <p className="text-sm text-slate-600 mb-4">Revenue analysis, transactions, and financial performance</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('financial', '30d')}
+                          className="flex-1 bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('financial', '90d')}
+                          className="flex-1 bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Support Report */}
+                    <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-6 border border-red-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center">
+                          <Headphones className="h-6 w-6 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-red-600">Support</span>
+                      </div>
+                      <h4 className="font-semibold text-slate-900 mb-2">Support Report</h4>
+                      <p className="text-sm text-slate-600 mb-4">Customer support metrics and ticket resolution analysis</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('support', '30d')}
+                          className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('support', '90d')}
+                          className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Performance Report */}
+                    <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-6 border border-indigo-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-12 h-12 bg-indigo-500 rounded-lg flex items-center justify-center">
+                          <Activity className="h-6 w-6 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-indigo-600">Performance</span>
+                      </div>
+                      <h4 className="font-semibold text-slate-900 mb-2">Performance Report</h4>
+                      <p className="text-sm text-slate-600 mb-4">Staff performance metrics and productivity analysis</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('performance', '30d')}
+                          className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('performance', '90d')}
+                          className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
                       </div>
                     </div>
                   </div>

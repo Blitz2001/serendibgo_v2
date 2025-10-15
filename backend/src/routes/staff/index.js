@@ -15,6 +15,7 @@ const guideRoutes = require('./guides');
 const financialRoutes = require('./financial');
 const supportRoutes = require('./support');
 const analyticsRoutes = require('./analytics');
+const reportRoutes = require('./reports');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -29,5 +30,6 @@ router.use('/guides', guideRoutes);
 router.use('/financial', financialRoutes);
 router.use('/support', supportRoutes);
 router.use('/analytics', analyticsRoutes);
+router.use('/reports', reportRoutes);
 
 module.exports = router;
