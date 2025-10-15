@@ -2,6 +2,8 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const Booking = require('../models/Booking');
 const User = require('../models/User');
 const CustomTrip = require('../models/CustomTrip');
+const HotelBooking = require('../models/hotels/HotelBooking');
+const VehicleBooking = require('../models/vehicles/VehicleBooking');
 const asyncHandler = require('express-async-handler');
 
 // Debug Stripe key
@@ -98,17 +100,65 @@ const createPaymentIntent = asyncHandler(async (req, res) => {
   try {
     const { bookingId, amount, currency = 'LKR' } = req.body;
 
+    console.log('=== CREATE PAYMENT INTENT DEBUG ===');
+    console.log('Request body:', { bookingId, amount, currency });
+    console.log('User ID:', req.user?._id);
+
     // Validate required fields
     if (!bookingId || !amount) {
+      console.log('❌ Missing required fields:', { bookingId: !!bookingId, amount: !!amount });
       return res.status(400).json({
         success: false,
         message: 'Booking ID and amount are required'
       });
     }
 
-    // Find the booking
-    const booking = await Booking.findById(bookingId).populate('user guide');
+    // Find the booking - try main Booking collection first, then specific collections
+    let booking = await Booking.findById(bookingId).populate('user guide');
+    let bookingType = 'main';
+    
     if (!booking) {
+      console.log('📋 Booking not found in main collection, checking vehicle bookings...');
+      // Try VehicleBooking collection
+      const vehicleBooking = await VehicleBooking.findById(bookingId).populate('user vehicle');
+      if (vehicleBooking) {
+        booking = vehicleBooking;
+        bookingType = 'vehicle';
+        console.log('📋 Vehicle booking found:', {
+          id: booking._id,
+          status: booking.bookingStatus,
+          paymentStatus: booking.paymentStatus,
+          user: booking.user?.email
+        });
+      }
+    }
+    
+    if (!booking) {
+      console.log('📋 Booking not found in vehicle collection, checking hotel bookings...');
+      // Try HotelBooking collection
+      const hotelBooking = await HotelBooking.findById(bookingId).populate('user hotel room');
+      if (hotelBooking) {
+        booking = hotelBooking;
+        bookingType = 'hotel';
+        console.log('📋 Hotel booking found:', {
+          id: booking._id,
+          status: booking.bookingStatus,
+          paymentStatus: booking.paymentStatus,
+          user: booking.user?.email
+        });
+      }
+    }
+    
+    console.log('📋 Final booking result:', booking ? {
+      id: booking._id,
+      type: bookingType,
+      status: booking.status || booking.bookingStatus,
+      paymentStatus: booking.paymentStatus,
+      user: booking.user?.email
+    } : 'NOT FOUND');
+    
+    if (!booking) {
+      console.log('❌ Booking not found for ID:', bookingId);
       return res.status(404).json({
         success: false,
         message: 'Booking not found'
@@ -117,6 +167,10 @@ const createPaymentIntent = asyncHandler(async (req, res) => {
 
     // Check if booking belongs to the user
     if (booking.user._id.toString() !== req.user._id.toString()) {
+      console.log('❌ User not authorized for booking:', {
+        bookingUserId: booking.user._id.toString(),
+        requestUserId: req.user._id.toString()
+      });
       return res.status(403).json({
         success: false,
         message: 'Not authorized to pay for this booking'
@@ -124,7 +178,9 @@ const createPaymentIntent = asyncHandler(async (req, res) => {
     }
 
     // Check if booking is already paid
-    if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'completed') {
+    const currentPaymentStatus = booking.paymentStatus;
+    if (currentPaymentStatus === 'paid' || currentPaymentStatus === 'completed') {
+      console.log('❌ Booking already paid:', currentPaymentStatus);
       return res.status(400).json({
         success: false,
         message: 'Booking is already paid'
@@ -134,16 +190,33 @@ const createPaymentIntent = asyncHandler(async (req, res) => {
     // Convert amount to cents (Stripe expects amounts in smallest currency unit)
     const amountInCents = Math.round(amount * 100);
 
+    // For testing purposes, limit amount to Stripe's test mode limit
+    // In production, you would handle large amounts differently
+    const maxTestAmount = 999999.99; // Stripe test mode limit
+    const testAmount = amount > maxTestAmount ? maxTestAmount : amount;
+    const testAmountInCents = Math.round(testAmount * 100);
+
+    console.log('Payment amount validation:', {
+      originalAmount: amount,
+      testAmount: testAmount,
+      originalAmountInCents: amountInCents,
+      testAmountInCents: testAmountInCents,
+      isTestMode: true
+    });
+
     // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountInCents,
+      amount: testAmountInCents,
       currency: currency.toLowerCase(),
       metadata: {
         bookingId: bookingId,
         userId: req.user._id.toString(),
-        bookingReference: booking.bookingReference
+        bookingReference: booking.bookingReference || booking._id.toString(),
+        originalAmount: amount.toString(),
+        isTestPayment: 'true',
+        bookingType: bookingType
       },
-      description: `Payment for booking ${booking.bookingReference}`,
+      description: `Payment for booking ${booking.bookingReference || booking._id}`,
       receipt_email: booking.user.email
     });
 
@@ -157,7 +230,10 @@ const createPaymentIntent = asyncHandler(async (req, res) => {
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
         amount: amount,
-        currency: currency
+        testAmount: testAmount,
+        currency: currency,
+        isTestPayment: amount > maxTestAmount,
+        message: amount > maxTestAmount ? 'Payment amount capped for testing purposes' : null
       }
     });
 
@@ -236,6 +312,38 @@ const confirmPayment = asyncHandler(async (req, res) => {
       } catch (customTripError) {
         console.error('Failed to update custom trip status:', customTripError);
         // Don't fail the payment if custom trip update fails
+      }
+    }
+
+    // Update hotel booking status if this is a hotel booking
+    if (booking.bookingType === 'hotel' || booking.hotel) {
+      try {
+        const hotelBooking = await HotelBooking.findOne({ bookingReference: booking.bookingReference });
+        if (hotelBooking) {
+          hotelBooking.paymentStatus = 'paid';
+          hotelBooking.bookingStatus = 'confirmed';
+          await hotelBooking.save();
+          console.log('Hotel booking status updated:', hotelBooking._id);
+        }
+      } catch (hotelBookingError) {
+        console.error('Failed to update hotel booking status:', hotelBookingError);
+        // Don't fail the payment if hotel booking update fails
+      }
+    }
+
+    // Update vehicle booking status if this is a vehicle booking
+    if (booking.bookingType === 'vehicle' || booking.vehicle) {
+      try {
+        const vehicleBooking = await VehicleBooking.findOne({ bookingReference: booking.bookingReference });
+        if (vehicleBooking) {
+          vehicleBooking.paymentStatus = 'paid';
+          vehicleBooking.bookingStatus = 'confirmed';
+          await vehicleBooking.save();
+          console.log('Vehicle booking status updated:', vehicleBooking._id);
+        }
+      } catch (vehicleBookingError) {
+        console.error('Failed to update vehicle booking status:', vehicleBookingError);
+        // Don't fail the payment if vehicle booking update fails
       }
     }
 

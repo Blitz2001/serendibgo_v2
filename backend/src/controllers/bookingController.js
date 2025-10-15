@@ -3,6 +3,8 @@ const CustomTrip = require('../models/CustomTrip');
 const Tour = require('../models/Tour');
 const User = require('../models/User');
 const { createNotification } = require('./notificationController');
+const pdfService = require('../services/pdfService');
+const emailService = require('../services/emailService');
 
 // @desc    Get all user bookings (both regular tours and custom trips)
 // @route   GET /api/bookings/user
@@ -476,6 +478,8 @@ const createBooking = async (req, res) => {
   try {
     const { tourId, startDate, endDate, groupSize, specialRequests } = req.body;
 
+    console.log('🎯 Creating tour booking:', { tourId, startDate, endDate, groupSize, specialRequests });
+
     // Validate required fields
     if (!tourId || !startDate || !endDate || !groupSize) {
       return res.status(400).json({
@@ -485,7 +489,7 @@ const createBooking = async (req, res) => {
     }
 
     // Get tour details
-    const tour = await Tour.findById(tourId);
+    const tour = await Tour.findById(tourId).populate('guide', 'firstName lastName email phone avatar');
     if (!tour) {
       return res.status(404).json({
         success: false,
@@ -497,12 +501,17 @@ const createBooking = async (req, res) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const duration = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-    const totalAmount = tour.price * groupSize * duration;
+    const totalAmount = tour.price * groupSize;
+
+    // Generate unique booking reference
+    const bookingReference = `${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
     // Create booking
     const booking = new Booking({
       user: req.user._id,
       tour: tourId,
+      guide: tour.guide._id, // Assign the tour's guide
+      bookingDate: new Date(),
       startDate: start,
       endDate: end,
       duration,
@@ -510,27 +519,79 @@ const createBooking = async (req, res) => {
       totalAmount,
       specialRequests,
       status: 'pending',
-      paymentStatus: 'pending'
+      paymentStatus: 'pending',
+      bookingReference
     });
 
-    await booking.save();
+    try {
+      await booking.save();
+    } catch (dbError) {
+      console.error('❌ Failed to save booking due to MongoDB connection:', dbError.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection error. Please try again later.'
+      });
+    }
+
+    console.log('✅ Tour booking saved:', booking._id);
 
     // Populate the booking with tour and user details
     await booking.populate('tour', 'title description images duration price location');
+    await booking.populate('guide', 'firstName lastName email phone avatar rating');
     await booking.populate('user', 'firstName lastName email phone');
+
+    console.log('✅ Tour booking populated:', {
+      id: booking._id,
+      user: booking.user?.firstName,
+      guide: booking.guide?.firstName,
+      tour: booking.tour?.title,
+      status: booking.status
+    });
+
+    // Create notification for the tour guide
+    try {
+      await createNotification({
+        user: tour.guide._id,
+        type: 'booking',
+        title: 'New Tour Booking Request',
+        message: `${booking.user.firstName} ${booking.user.lastName} wants to book your tour "${tour.title}" for ${booking.groupSize} people starting ${start.toLocaleDateString()}`,
+        priority: 'high',
+        booking: booking._id,
+        tourist: booking.user._id,
+        actionUrl: `/guide/dashboard?tab=bookings`,
+        actionText: 'View Booking',
+        metadata: {
+          bookingId: booking._id,
+          tourTitle: tour.title,
+          groupSize: booking.groupSize,
+          totalAmount: booking.totalAmount,
+          startDate: start.toISOString()
+        }
+      });
+    } catch (notificationError) {
+      console.error('Error creating notification:', notificationError);
+      // Don't fail the booking if notification fails
+    }
 
     res.status(201).json({
       success: true,
-      message: 'Booking created successfully',
+      message: 'Tour booking created successfully',
       data: booking
     });
 
   } catch (error) {
-    console.error('Error creating booking:', error);
+    console.error('❌ Error creating tour booking:', error);
+    console.error('❌ Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      errors: error.errors
+    });
     res.status(500).json({
       success: false,
-      message: 'Error creating booking',
-      error: error.message
+      message: 'Error creating tour booking',
+      error: error.message,
+      details: error.errors || error.stack
     });
   }
 };
@@ -935,6 +996,211 @@ const createGuestGuideBooking = async (req, res) => {
   }
 };
 
+// @desc    Download booking confirmation PDF
+// @route   GET /api/bookings/:id/download-pdf
+// @access  Private
+const downloadBookingPDF = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Try to find regular booking first
+    let booking = await Booking.findById(id)
+      .populate('user', 'firstName lastName email phone')
+      .populate('tour', 'title description images duration price location itinerary')
+      .populate('guide', 'firstName lastName email phone profile.pricePerDay profile.specialties')
+      .populate('customTrip');
+
+    if (booking) {
+      // Check if user owns this booking
+      if (booking.user._id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to download this booking'
+        });
+      }
+
+      // Generate PDF based on booking type
+      let pdfBuffer;
+      if (booking.customTrip) {
+        // Custom trip booking
+        const customTrip = await CustomTrip.findById(booking.customTrip)
+          .populate('staffAssignment.assignedGuide', 'firstName lastName email phone profile.pricePerDay profile.specialties')
+          .populate('staffAssignment.hotelBookings.hotel', 'name location starRating amenities')
+          .populate('staffAssignment.assignedVehicles.vehicleId', 'type model capacity')
+          .populate('staffAssignment.assignedVehicles.driver', 'firstName lastName phone');
+
+        pdfBuffer = await pdfService.generateCustomTripInvoice({
+          booking,
+          customTrip,
+          user: booking.user,
+          guide: customTrip?.staffAssignment?.assignedGuide
+        });
+      } else {
+        // Regular tour booking
+        pdfBuffer = await pdfService.generateRegularBookingPDF({
+          booking,
+          tour: booking.tour,
+          user: booking.user,
+          guide: booking.guide
+        });
+      }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="booking-confirmation-${booking._id}.pdf"`);
+      res.send(pdfBuffer);
+      return;
+    }
+
+    // Try to find custom trip directly
+    const customTrip = await CustomTrip.findById(id)
+      .populate('customer', 'firstName lastName email phone')
+      .populate('staffAssignment.assignedGuide', 'firstName lastName email phone profile.pricePerDay profile.specialties')
+      .populate('staffAssignment.hotelBookings.hotel', 'name location starRating amenities')
+      .populate('staffAssignment.assignedVehicles.vehicleId', 'type model capacity')
+      .populate('staffAssignment.assignedVehicles.driver', 'firstName lastName phone')
+      .populate('booking');
+
+    if (customTrip) {
+      // Check if user owns this custom trip
+      if (customTrip.customer._id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to download this booking'
+        });
+      }
+
+      const pdfBuffer = await pdfService.generateCustomTripInvoice({
+        booking: customTrip.booking,
+        customTrip,
+        user: customTrip.customer,
+        guide: customTrip.staffAssignment?.assignedGuide
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="custom-trip-invoice-${customTrip._id}.pdf"`);
+      res.send(pdfBuffer);
+      return;
+    }
+
+    // Booking not found
+    res.status(404).json({
+      success: false,
+      message: 'Booking not found'
+    });
+
+  } catch (error) {
+    console.error('Error downloading booking PDF:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error generating PDF',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Send booking confirmation email
+// @route   POST /api/bookings/:id/send-confirmation-email
+// @access  Private
+const sendConfirmationEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Try to find regular booking first
+    let booking = await Booking.findById(id)
+      .populate('user', 'firstName lastName email phone')
+      .populate('tour', 'title description images duration price location itinerary')
+      .populate('guide', 'firstName lastName email phone profile.pricePerDay profile.specialties')
+      .populate('customTrip');
+
+    if (booking) {
+      // Check if user owns this booking
+      if (booking.user._id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to send email for this booking'
+        });
+      }
+
+      // Send email based on booking type
+      if (booking.customTrip) {
+        // Custom trip booking
+        const customTrip = await CustomTrip.findById(booking.customTrip)
+          .populate('staffAssignment.assignedGuide', 'firstName lastName email phone profile.pricePerDay profile.specialties')
+          .populate('staffAssignment.hotelBookings.hotel', 'name location starRating amenities')
+          .populate('staffAssignment.assignedVehicles.vehicleId', 'type model capacity')
+          .populate('staffAssignment.assignedVehicles.driver', 'firstName lastName phone');
+
+        await emailService.sendBookingConfirmationEmail({
+          booking,
+          customTrip,
+          user: booking.user,
+          guide: customTrip?.staffAssignment?.assignedGuide
+        });
+      } else {
+        // Regular tour booking
+        await emailService.sendBookingConfirmationEmail({
+          booking,
+          tour: booking.tour,
+          user: booking.user,
+          guide: booking.guide
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Confirmation email sent successfully'
+      });
+      return;
+    }
+
+    // Try to find custom trip directly
+    const customTrip = await CustomTrip.findById(id)
+      .populate('customer', 'firstName lastName email phone')
+      .populate('staffAssignment.assignedGuide', 'firstName lastName email phone profile.pricePerDay profile.specialties')
+      .populate('staffAssignment.hotelBookings.hotel', 'name location starRating amenities')
+      .populate('staffAssignment.assignedVehicles.vehicleId', 'type model capacity')
+      .populate('staffAssignment.assignedVehicles.driver', 'firstName lastName phone')
+      .populate('booking');
+
+    if (customTrip) {
+      // Check if user owns this custom trip
+      if (customTrip.customer._id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to send email for this booking'
+        });
+      }
+
+      await emailService.sendBookingConfirmationEmail({
+        booking: customTrip.booking,
+        customTrip,
+        user: customTrip.customer,
+        guide: customTrip.staffAssignment?.assignedGuide
+      });
+
+      res.json({
+        success: true,
+        message: 'Confirmation email sent successfully'
+      });
+      return;
+    }
+
+    // Booking not found
+    res.status(404).json({
+      success: false,
+      message: 'Booking not found'
+    });
+
+  } catch (error) {
+    console.error('Error sending confirmation email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error sending email',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createBooking,
   getUserBookings,
@@ -943,5 +1209,7 @@ module.exports = {
   cancelBooking,
   getGuideBookings,
   createGuideBooking,
-  createGuestGuideBooking
+  createGuestGuideBooking,
+  downloadBookingPDF,
+  sendConfirmationEmail
 };

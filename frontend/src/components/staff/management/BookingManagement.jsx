@@ -35,7 +35,8 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Car
+  Car,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import staffService from '../../../services/staff/staffService';
@@ -265,7 +266,7 @@ const BookingManagement = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -312,6 +313,30 @@ const BookingManagement = () => {
             </div>
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
               <DollarSign className="h-6 w-6 text-purple-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-600">Guide Bookings</p>
+              <p className="text-2xl font-bold text-blue-600">{statistics.guideBookings || 0}</p>
+            </div>
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <User className="h-6 w-6 text-blue-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-600">Custom Trip Bookings</p>
+              <p className="text-2xl font-bold text-indigo-600">{statistics.customTripBookings || 0}</p>
+            </div>
+            <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+              <Sparkles className="h-6 w-6 text-indigo-600" />
             </div>
           </div>
         </div>
@@ -381,6 +406,7 @@ const BookingManagement = () => {
                 <option value="all">All Types</option>
                 <option value="tour">Tour Bookings</option>
                 <option value="guide">Guide Bookings</option>
+                <option value="custom-trip">Custom Trip Bookings</option>
                 <option value="hotel">Hotel Bookings</option>
                 <option value="vehicle">Vehicle Bookings</option>
               </select>
@@ -533,7 +559,8 @@ const BookingManagement = () => {
                             </div>
                             <div>
                               <h3 className="font-semibold text-slate-900">
-                                {booking.tour?.title || 
+                                {booking.customTrip ? `Custom Trip - ${booking.customTrip.requestDetails?.destination || 'Sri Lanka'}` :
+                                 booking.tour?.title || 
                                  (booking.hotel ? `Hotel Booking - ${booking.hotel.name}` : 
                                   (booking.vehicle ? `Vehicle Booking - ${booking.vehicle.make} ${booking.vehicle.model}` :
                                    (booking.guide ? `Guide Booking - ${booking.guide.firstName} ${booking.guide.lastName}` : 'Booking')))}
@@ -541,10 +568,37 @@ const BookingManagement = () => {
                               <p className="text-sm text-slate-600">
                                 {booking.user?.firstName} {booking.user?.lastName}
                               </p>
-                              {booking.guide && !booking.tour && !booking.hotel && !booking.vehicle && (
-                                <p className="text-xs text-blue-600 font-medium">
-                                  Direct Guide Booking
-                                </p>
+                              {booking.customTrip && (
+                                <div className="flex items-center space-x-2 mt-1">
+                                  <p className="text-xs text-indigo-600 font-medium">
+                                    Custom Trip Booking
+                                  </p>
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    booking.paymentStatus === 'paid' 
+                                      ? 'bg-green-100 text-green-800'
+                                      : booking.paymentStatus === 'pending'
+                                      ? 'bg-yellow-100 text-yellow-800'
+                                      : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {booking.paymentStatus}
+                                  </span>
+                                </div>
+                              )}
+                              {booking.guide && !booking.tour && !booking.hotel && !booking.vehicle && !booking.customTrip && (
+                                <div className="flex items-center space-x-2 mt-1">
+                                  <p className="text-xs text-blue-600 font-medium">
+                                    Direct Guide Booking
+                                  </p>
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    booking.paymentStatus === 'paid' 
+                                      ? 'bg-green-100 text-green-800'
+                                      : booking.paymentStatus === 'pending'
+                                      ? 'bg-yellow-100 text-yellow-800'
+                                      : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {booking.paymentStatus}
+                                  </span>
+                                </div>
                               )}
                               {booking.hotel && (
                                 <p className="text-xs text-green-600 font-medium">
@@ -554,6 +608,11 @@ const BookingManagement = () => {
                               {booking.vehicle && (
                                 <p className="text-xs text-purple-600 font-medium">
                                   Vehicle Booking
+                                </p>
+                              )}
+                              {booking.bookingReference && (
+                                <p className="text-xs text-slate-500 mt-1">
+                                  Ref: {booking.bookingReference}
                                 </p>
                               )}
                             </div>
@@ -582,6 +641,42 @@ const BookingManagement = () => {
                                 (booking.vehicle ? `${booking.vehicle.type || 'Vehicle'}` : 'N/A'))}
                             </div>
                           </div>
+
+                          {/* Additional info for custom trip bookings */}
+                          {booking.customTrip && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-600 mt-2 pt-2 border-t border-slate-100">
+                              <div className="flex items-center">
+                                <MapPin className="h-4 w-4 mr-2" />
+                                {booking.customTrip.requestDetails?.destination || 'Sri Lanka'}
+                              </div>
+                              <div className="flex items-center">
+                                <Users className="h-4 w-4 mr-2" />
+                                {booking.customTrip.requestDetails?.groupSize || booking.groupSize} people
+                              </div>
+                              <div className="flex items-center">
+                                <Calendar className="h-4 w-4 mr-2" />
+                                End: {new Date(booking.endDate).toLocaleDateString()}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Additional info for guide bookings */}
+                          {booking.guide && !booking.tour && !booking.hotel && !booking.vehicle && !booking.customTrip && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-600 mt-2 pt-2 border-t border-slate-100">
+                              <div className="flex items-center">
+                                <Phone className="h-4 w-4 mr-2" />
+                                {booking.user?.phone || 'N/A'}
+                              </div>
+                              <div className="flex items-center">
+                                <Mail className="h-4 w-4 mr-2" />
+                                {booking.user?.email || 'N/A'}
+                              </div>
+                              <div className="flex items-center">
+                                <Calendar className="h-4 w-4 mr-2" />
+                                End: {new Date(booking.endDate).toLocaleDateString()}
+                              </div>
+                            </div>
+                          )}
 
                           {booking.specialRequests && (
                             <div className="mt-2 text-sm text-slate-600">
@@ -770,6 +865,24 @@ const BookingManagement = () => {
                         <div>
                           <span className="font-medium text-slate-700">Duration:</span>
                           <p className="text-slate-600">{selectedBooking.booking.duration}</p>
+                        </div>
+                        {selectedBooking.booking.bookingReference && (
+                          <div>
+                            <span className="font-medium text-slate-700">Booking Reference:</span>
+                            <p className="text-slate-600">{selectedBooking.booking.bookingReference}</p>
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-medium text-slate-700">Start Date:</span>
+                          <p className="text-slate-600">{new Date(selectedBooking.booking.startDate).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-slate-700">End Date:</span>
+                          <p className="text-slate-600">{new Date(selectedBooking.booking.endDate).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-slate-700">Group Size:</span>
+                          <p className="text-slate-600">{selectedBooking.booking.groupSize} people</p>
                         </div>
                       </>
                     )}

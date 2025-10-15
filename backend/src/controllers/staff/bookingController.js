@@ -126,6 +126,9 @@ const getAllBookings = asyncHandler(async (req, res) => {
         } else if (type === 'guide') {
           bookingFilter.guide = { $exists: true };
           bookingFilter.tour = { $exists: false };
+          bookingFilter.customTrip = { $exists: false };
+        } else if (type === 'custom-trip') {
+          bookingFilter.customTrip = { $exists: true };
         } else if (type === 'hotel') {
           // Hotel bookings will be handled separately
           return null;
@@ -210,13 +213,14 @@ const getAllBookings = asyncHandler(async (req, res) => {
     let vehicleBookings = [];
     
     // Only fetch bookings based on type filter
-    if (!type || type === 'all' || type === 'tour' || type === 'guide') {
+    if (!type || type === 'all' || type === 'tour' || type === 'guide' || type === 'custom-trip') {
       // Get tour/guide bookings from multiple collections with proper filtering
       const tourGuideFilter = buildBookingFilter(filter, type);
       const generalBookings = tourGuideFilter ? await Booking.find(tourGuideFilter)
-        .populate('user', 'firstName lastName email phone')
-        .populate('tour', 'title duration price location')
-        .populate('guide', 'firstName lastName email phone')
+        .populate('user', 'firstName lastName email phone avatar')
+        .populate('tour', 'title duration price location images')
+        .populate('guide', 'firstName lastName email phone avatar profile')
+        .populate('customTrip', 'requestDetails staffAssignment status paymentStatus')
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit)) : [];
@@ -237,8 +241,26 @@ const getAllBookings = asyncHandler(async (req, res) => {
         .limit(parseInt(limit))
         .toArray();
       
+      // Format general bookings to include type information
+      const formattedGeneralBookings = generalBookings.map(booking => ({
+        ...booking.toObject(),
+        type: booking.customTrip ? 'custom-trip' : (booking.tour ? 'tour' : 'guide')
+      }));
+      
+      // Format guide bookings from collection
+      const formattedGuideBookings = guideBookingsFromCollection.map(booking => ({
+        ...booking,
+        type: 'guide'
+      }));
+      
+      // Format tour bookings from collection
+      const formattedTourBookings = tourBookingsFromCollection.map(booking => ({
+        ...booking,
+        type: 'tour'
+      }));
+      
       // Combine all tour/guide bookings
-      tourBookings = [...generalBookings, ...tourBookingsFromCollection, ...guideBookingsFromCollection];
+      tourBookings = [...formattedGeneralBookings, ...formattedTourBookings, ...formattedGuideBookings];
     }
     
     // Only fetch hotel bookings if type filter allows it
@@ -341,13 +363,18 @@ const getAllBookings = asyncHandler(async (req, res) => {
                  await HotelBooking.countDocuments({ bookingStatus: 'cancelled' }) + 
                  await VehicleBooking.countDocuments({ bookingStatus: 'cancelled' }),
       guideBookings: await Booking.countDocuments({ 
-        guide: { $exists: true }, 
-        tour: { $exists: false } 
+        guide: { $exists: true, $ne: null }, 
+        tour: { $exists: false },
+        customTrip: { $exists: false }
       }) + await mongoose.connection.db.collection('guidebookings').countDocuments(),
       tourBookings: await Booking.countDocuments({ 
         tour: { $exists: true }, 
-        guide: { $exists: true } 
+        guide: { $exists: true },
+        customTrip: { $exists: false }
       }) + await mongoose.connection.db.collection('tourbookings').countDocuments(),
+      customTripBookings: await Booking.countDocuments({ 
+        customTrip: { $exists: true }
+      }),
       hotelBookings: await HotelBooking.countDocuments(),
       vehicleBookings: await VehicleBooking.countDocuments(),
       today: await Booking.countDocuments({

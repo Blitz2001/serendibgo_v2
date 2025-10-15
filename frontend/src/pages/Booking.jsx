@@ -168,8 +168,36 @@ const Booking = () => {
 
       const response = await api.post('/vehicle-bookings', bookingData)
       
-      toast.success('Booking created successfully!')
-      navigate('/my-bookings')
+      if (response.data.status === 'success') {
+        const booking = response.data.data
+        const totalAmount = calculatePrice()
+        
+        console.log('=== VEHICLE BOOKING CREATED ===')
+        console.log('Response data:', response.data)
+        console.log('Booking object:', booking)
+        console.log('Booking ID:', booking?._id)
+        console.log('Total amount:', totalAmount)
+        
+        // Navigate to payment page
+        navigate('/payment', {
+          state: {
+            bookingId: booking._id,
+            bookingType: 'vehicle',
+            amount: totalAmount,
+            currency: 'LKR',
+            vehicleName: vehicle.make + ' ' + vehicle.model,
+            vehicleType: vehicle.type,
+            pickupLocation: formData.pickupLocation.address,
+            dropoffLocation: formData.dropoffLocation.address,
+            pickupDateTime: formData.startDate,
+            dropoffDateTime: formData.endDate,
+            passengers: parseInt(formData.adults) + parseInt(formData.children) + parseInt(formData.infants),
+            bookingReference: booking.bookingReference
+          }
+        })
+      } else {
+        toast.error(response.data.message || 'Failed to create booking')
+      }
       
     } catch (error) {
       console.error('Booking error:', error)

@@ -367,8 +367,27 @@ const HotelBooking = () => {
 
       const response = await bookingAPI.createBooking(bookingPayload);
       
-      toast.success('Booking created successfully!');
-      navigate(`/booking-confirmation/${response.data.booking._id}`);
+      if (response.data.status === 'success') {
+        const booking = response.data.booking;
+        
+        // Navigate to payment page
+        navigate('/payment', {
+          state: {
+            bookingId: booking._id,
+            bookingType: 'hotel',
+            amount: pricing.total,
+            currency: 'LKR',
+            hotelName: hotel.name,
+            roomName: room.name,
+            checkIn: bookingData.checkIn,
+            checkOut: bookingData.checkOut,
+            guests: bookingData.adults,
+            bookingReference: booking.bookingReference
+          }
+        });
+      } else {
+        toast.error(response.data.message || 'Failed to create booking');
+      }
     } catch (error) {
       console.error('Error creating booking:', error);
       toast.error(error.response?.data?.message || 'Failed to create booking');

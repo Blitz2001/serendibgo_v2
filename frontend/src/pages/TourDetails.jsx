@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
+import { toast } from 'react-hot-toast'
 import {
   MapPin,
   Star,
@@ -45,6 +47,7 @@ import { useTour } from '../context/TourContext'
 const TourDetails = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user, isAuthenticated } = useAuth()
   const { tours, setCurrentTour } = useTour()
   const [tour, setTour] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -61,6 +64,7 @@ const TourDetails = () => {
   const [showBookingCalendar, setShowBookingCalendar] = useState(false)
   const [selectedBookingDate, setSelectedBookingDate] = useState(new Date())
   const [activeTab, setActiveTab] = useState('overview')
+  const [bookingLoading, setBookingLoading] = useState(false)
 
   // Fetch tour data
   useEffect(() => {
@@ -90,17 +94,101 @@ const TourDetails = () => {
     }
   }
 
-  const handleBookingSubmit = (e) => {
+  const handleBookingSubmit = async (e) => {
     e.preventDefault()
-    console.log('Booking submitted:', { tour: tour, ...bookingData })
-    alert('Booking request submitted successfully! We will contact you soon.')
-    setShowBookingModal(false)
-    setBookingData({
-      date: '',
-      duration: '',
-      groupSize: 1,
-      specialRequests: ''
-    })
+    
+    // Check if user is authenticated
+    if (!isAuthenticated || !user) {
+      toast.error('Please login to book a tour')
+      navigate('/login')
+      return
+    }
+
+    // Validate booking data
+    if (!bookingData.date || !bookingData.groupSize) {
+      toast.error('Please fill in all required fields')
+      return
+    }
+
+    try {
+      setBookingLoading(true)
+      
+      console.log('🎯 Creating tour booking:', { 
+        tourId: tour._id, 
+        tourTitle: tour.title,
+        bookingData 
+      })
+
+      // Calculate dates
+      const startDate = new Date(bookingData.date)
+      const endDate = new Date(startDate)
+      endDate.setDate(endDate.getDate() + (tour.duration || 1))
+
+      // Create booking payload
+      const bookingPayload = {
+        tourId: tour._id,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        groupSize: parseInt(bookingData.groupSize),
+        specialRequests: bookingData.specialRequests || ''
+      }
+
+      console.log('Booking payload:', bookingPayload)
+
+      // Create the booking
+      const response = await api.post('/bookings', bookingPayload)
+      
+      if (response.data.success) {
+        const booking = response.data.data
+        const totalAmount = tour.price * bookingData.groupSize
+        
+        console.log('✅ Tour booking created:', booking._id)
+        
+        // Navigate to payment page with booking data
+        navigate('/payment', {
+          state: {
+            bookingId: booking._id,
+            bookingType: 'tour',
+            amount: totalAmount,
+            currency: 'USD',
+            tourName: tour.title,
+            tourDescription: tour.description,
+            startDate: startDate.toISOString().split('T')[0],
+            endDate: endDate.toISOString().split('T')[0],
+            groupSize: bookingData.groupSize,
+            duration: tour.duration,
+            bookingReference: booking.bookingReference
+          }
+        })
+        
+        // Close modal and reset form
+        setShowBookingModal(false)
+        setBookingData({
+          date: '',
+          duration: '',
+          groupSize: 1,
+          specialRequests: ''
+        })
+        
+        toast.success('Booking created successfully! Redirecting to payment...')
+      } else {
+        toast.error(response.data.message || 'Failed to create booking')
+      }
+    } catch (error) {
+      console.error('❌ Error creating tour booking:', error)
+      console.error('Error response:', error.response?.data)
+      
+      if (error.response?.status === 401) {
+        toast.error('Your session has expired. Please login again.')
+        navigate('/login')
+      } else if (error.response?.status === 403) {
+        toast.error('You are not authorized to make this booking.')
+      } else {
+        toast.error(error.response?.data?.message || 'Failed to create booking. Please try again.')
+      }
+    } finally {
+      setBookingLoading(false)
+    }
   }
 
   const toggleWishlist = () => {
@@ -691,10 +779,20 @@ const TourDetails = () => {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-2xl hover:from-blue-700 hover:to-cyan-600 transition-all duration-300 font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-2"
+                    disabled={bookingLoading}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-2xl hover:from-blue-700 hover:to-cyan-600 transition-all duration-300 font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
-                    <BookOpen className="h-4 w-4" />
-                    Book Now
+                    {bookingLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Creating Booking...
+                      </>
+                    ) : (
+                      <>
+                        <BookOpen className="h-4 w-4" />
+                        Book Now
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

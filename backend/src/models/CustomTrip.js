@@ -340,7 +340,7 @@ customTripSchema.methods.canBeApproved = function() {
 
 // Method to check if trip can be confirmed
 customTripSchema.methods.canBeConfirmed = function() {
-  return this.status === 'approved' && this.paymentStatus === 'paid';
+  return this.status === 'approved';
 };
 
 // Method to check if trip is overdue
