@@ -44,7 +44,7 @@ const Tours = () => {
   const [viewMode, setViewMode] = useState('grid')
   const [showFilters, setShowFilters] = useState(false)
   const [sortBy, setSortBy] = useState('featured')
-  const [priceRange, setPriceRange] = useState([0, 1000])
+  const [priceRange, setPriceRange] = useState([0, 1000000])
   const [selectedCategories, setSelectedCategories] = useState([])
 
   const categories = [
@@ -176,14 +176,23 @@ const Tours = () => {
       setLoading(true)
       setError(null)
       
+      console.log('🔍 Frontend: Fetching tours...')
       const response = await api.get('/tours')
+      console.log('🔍 Frontend: API Response:', response)
+      console.log('🔍 Frontend: Response data:', response.data)
+      
       if (response.data.success) {
+        console.log('🔍 Frontend: Tours received:', response.data.data.length)
+        console.log('🔍 Frontend: Tours data:', response.data.data)
         setTours(response.data.data)
+        console.log('🔍 Frontend: Tours state updated')
       } else {
+        console.error('🔍 Frontend: API returned success: false')
         setError('Failed to fetch tours')
       }
     } catch (err) {
-      console.error('Error fetching tours:', err)
+      console.error('🔍 Frontend: Error fetching tours:', err)
+      console.error('🔍 Frontend: Error response:', err.response)
       setError('Failed to load tours. Please try again.')
     } finally {
       setLoading(false)
@@ -211,12 +220,34 @@ const Tours = () => {
 
   const filteredTours = tours.filter(tour => {
     const matchesSearch = tour.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         tour.shortDescription.toLowerCase().includes(searchQuery.toLowerCase())
+                         (tour.shortDescription && tour.shortDescription.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                         (tour.description && tour.description.toLowerCase().includes(searchQuery.toLowerCase()))
     const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(tour.category)
     const matchesPrice = tour.price >= priceRange[0] && tour.price <= priceRange[1]
     
+    // Debug individual tour filtering
+    console.log(`🔍 Frontend: Tour "${tour.title}" filtering:`, {
+      matchesSearch,
+      matchesCategory,
+      matchesPrice,
+      tourPrice: tour.price,
+      priceRange,
+      selectedCategories,
+      searchQuery,
+      finalMatch: matchesSearch && matchesCategory && matchesPrice
+    })
+    
     return matchesSearch && matchesCategory && matchesPrice
   })
+
+  // Debug tours state and filtering
+  console.log('🔍 Frontend: Tours state:', tours)
+  console.log('🔍 Frontend: Tours length:', tours.length)
+  console.log('🔍 Frontend: Filtered tours:', filteredTours)
+  console.log('🔍 Frontend: Filtered tours length:', filteredTours.length)
+  console.log('🔍 Frontend: Search query:', searchQuery)
+  console.log('🔍 Frontend: Selected categories:', selectedCategories)
+  console.log('🔍 Frontend: Price range:', priceRange)
 
   const sortedTours = [...filteredTours].sort((a, b) => {
     switch (sortBy) {
@@ -263,8 +294,35 @@ const Tours = () => {
         </button>
 
         {/* Tour Image */}
-        <div className="aspect-[4/3] bg-gradient-to-br from-blue-500/10 to-cyan-500/10 flex items-center justify-center relative">
-          <MapPin className="w-16 h-16 text-blue-500/30" />
+        <div className="aspect-[4/3] bg-gradient-to-br from-blue-500/10 to-cyan-500/10 flex items-center justify-center relative overflow-hidden">
+          {tour.images && tour.images.length > 0 ? (
+            <img
+              src={typeof tour.images[0] === 'string' ? tour.images[0] : tour.images[0]?.url}
+              alt={tour.title}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                console.error('Tour image failed to load:', {
+                  tourTitle: tour.title,
+                  imageSrc: e.target.src,
+                  imagesData: tour.images
+                });
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+              onLoad={() => {
+                console.log('Tour image loaded successfully:', {
+                  tourTitle: tour.title,
+                  imageSrc: typeof tour.images[0] === 'string' ? tour.images[0] : tour.images[0]?.url
+                });
+              }}
+            />
+          ) : null}
+          <div 
+            className="w-full h-full flex items-center justify-center"
+            style={{ display: (tour.images && tour.images.length > 0) ? 'none' : 'flex' }}
+          >
+            <MapPin className="w-16 h-16 text-blue-500/30" />
+          </div>
           {/* Category Badge */}
           <div className="absolute bottom-4 left-4">
             <div className="px-3 py-1 rounded-full bg-white/90 backdrop-blur-sm text-slate-700 text-xs font-semibold border border-slate-200">
@@ -345,8 +403,35 @@ const Tours = () => {
     <div className="card bg-base-100 shadow-lg card-hover">
       <div className="card-body">
         <div className="flex gap-6">
-          <div className="w-48 h-32 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-xl flex items-center justify-center flex-shrink-0">
-            <MapPin className="w-8 h-8 text-primary/30" />
+          <div className="w-48 h-32 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+            {tour.images && tour.images.length > 0 ? (
+              <img
+                src={typeof tour.images[0] === 'string' ? tour.images[0] : tour.images[0]?.url}
+                alt={tour.title}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  console.error('Tour list image failed to load:', {
+                    tourTitle: tour.title,
+                    imageSrc: e.target.src,
+                    imagesData: tour.images
+                  });
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'flex';
+                }}
+                onLoad={() => {
+                  console.log('Tour list image loaded successfully:', {
+                    tourTitle: tour.title,
+                    imageSrc: typeof tour.images[0] === 'string' ? tour.images[0] : tour.images[0]?.url
+                  });
+                }}
+              />
+            ) : null}
+            <div 
+              className="w-full h-full flex items-center justify-center"
+              style={{ display: (tour.images && tour.images.length > 0) ? 'none' : 'flex' }}
+            >
+              <MapPin className="w-8 h-8 text-primary/30" />
+            </div>
           </div>
           
           <div className="flex-1">

@@ -127,15 +127,16 @@ const TripManagement = () => {
     duration: '',
     price: 0,
     maxParticipants: 1,
-    category: 'Cultural',
+    category: 'cultural',
     location: '',
-    difficulty: 'Easy',
+    difficulty: 'easy',
     languages: ['English'],
     highlights: [],
     included: [],
     excluded: [],
     requirements: '',
-    cancellationPolicy: '',
+    cancellationPolicy: 'moderate',
+    cancellationDetails: '',
     images: []
   });
 
@@ -155,6 +156,18 @@ const TripManagement = () => {
       const data = await staffService.getTrips(params);
       console.log('Trips data:', data);
       console.log('First trip structure:', data.data?.trips?.[0]);
+      
+      // Debug image data structure
+      data.data.trips.forEach((trip, index) => {
+        console.log(`Trip ${index + 1} (${trip.title}):`, {
+          hasImages: !!trip.images,
+          imagesLength: trip.images?.length || 0,
+          firstImage: trip.images?.[0],
+          firstImageType: typeof trip.images?.[0],
+          firstImageUrl: trip.images?.[0]?.url || trip.images?.[0]
+        });
+      });
+      
       setTrips(data.data.trips);
       setPagination(data.data.pagination);
     } catch (error) {
@@ -200,57 +213,103 @@ const TripManagement = () => {
 
   // Handle edit trip
   const handleEditTrip = (trip) => {
+    console.log('Editing trip:', trip);
     setSelectedTrip(trip);
-    setNewTrip(trip);
+    
+    // Populate the form with trip data
+    setNewTrip({
+      title: trip.title || '',
+      description: trip.description || '',
+      duration: trip.duration || '',
+      price: trip.price || 0,
+      maxParticipants: trip.maxParticipants || 1,
+      category: trip.category || 'cultural',
+      location: trip.location?.name || trip.location || '',
+      difficulty: trip.difficulty || 'easy',
+      languages: trip.languages || ['English'],
+      highlights: trip.highlights || [],
+      included: trip.included || [],
+      excluded: trip.excluded || [],
+      requirements: Array.isArray(trip.requirements) ? trip.requirements.join('\n') : trip.requirements || '',
+      cancellationPolicy: trip.cancellationPolicy || 'moderate',
+      cancellationDetails: trip.cancellationDetails || '',
+      images: trip.images?.map(img => img.url || img) || []
+    });
+    
     setShowEditModal(true);
   };
 
   // Handle delete trip
   const handleDeleteTrip = async (tripId) => {
     try {
+      console.log('Deleting trip with ID:', tripId);
+      
       await staffService.deleteTrip(tripId);
       toast.success('Trip deleted successfully');
+      
+      // Refresh the trips list and statistics
       fetchTrips();
+      fetchStatistics();
+      
+      // Close the modal
       setShowDeleteModal(false);
+      setSelectedTrip(null);
     } catch (error) {
       console.error('Delete trip error:', error);
-      toast.error(error.message || 'Failed to delete trip');
+      
+      // Show specific error messages based on the error
+      if (error.message.includes('active booking')) {
+        toast.error('Cannot delete trip with active bookings. Please cancel or complete the bookings first.');
+      } else if (error.message.includes('not found')) {
+        toast.error('Trip not found. It may have already been deleted.');
+      } else {
+        toast.error(error.message || 'Failed to delete trip');
+      }
     }
   };
 
-  // Handle create/update trip
-  const handleSaveTrip = async () => {
+  // Handle update trip
+  const handleUpdateTrip = async (e) => {
+    e.preventDefault();
+    
     try {
-      if (selectedTrip) {
-        await staffService.updateTrip(selectedTrip._id, newTrip);
-        toast.success('Trip updated successfully');
-      } else {
-        await staffService.createTrip(newTrip);
-        toast.success('Trip created successfully');
+      // Validate required fields
+      if (!newTrip.title || !newTrip.description || !newTrip.duration || !newTrip.price || !newTrip.maxParticipants || !newTrip.category) {
+        toast.error('Please fill in all required fields');
+        return;
       }
-      fetchTrips();
-      setShowCreateModal(false);
+
+      // Filter out empty highlights, included, excluded items, and images
+      const tripData = {
+        title: newTrip.title.trim(),
+        description: newTrip.description.trim(),
+        shortDescription: newTrip.description.substring(0, 200).trim(),
+        duration: parseInt(newTrip.duration),
+        price: parseFloat(newTrip.price),
+        maxParticipants: parseInt(newTrip.maxParticipants),
+        category: newTrip.category,
+        location: newTrip.location || 'Location not specified',
+        difficulty: newTrip.difficulty || 'easy',
+        highlights: (newTrip.highlights || []).filter(h => h.trim() !== ''),
+        included: (newTrip.included || []).filter(i => i.trim() !== ''),
+        excluded: (newTrip.excluded || []).filter(e => e.trim() !== ''),
+        images: (newTrip.images || []).filter(img => img.trim() !== ''),
+        requirements: newTrip.requirements ? [newTrip.requirements] : [],
+        cancellationPolicy: newTrip.cancellationPolicy || 'moderate',
+        cancellationDetails: newTrip.cancellationDetails || ''
+      };
+      
+      console.log('Updating trip with data:', tripData);
+      
+      await staffService.updateTrip(selectedTrip._id, tripData);
+      toast.success('Trip updated successfully');
       setShowEditModal(false);
-      setNewTrip({
-        title: '',
-        description: '',
-        duration: '',
-        price: 0,
-        maxParticipants: 1,
-        category: 'Cultural',
-        location: '',
-        difficulty: 'Easy',
-        languages: ['English'],
-        highlights: [],
-        included: [],
-        excluded: [],
-        requirements: '',
-        cancellationPolicy: '',
-        images: []
-      });
+      resetNewTrip();
+      fetchTrips();
+      fetchStatistics();
     } catch (error) {
-      console.error('Save trip error:', error);
-      toast.error(error.message || 'Failed to save trip');
+      console.error('Update trip error:', error);
+      toast.error(error.message || 'Failed to update trip');
     }
   };
 
@@ -277,18 +336,33 @@ const TripManagement = () => {
     e.preventDefault();
     
     try {
+      // Validate required fields
+      if (!newTrip.title || !newTrip.description || !newTrip.duration || !newTrip.price || !newTrip.maxParticipants || !newTrip.category) {
+        toast.error('Please fill in all required fields');
+        return;
+      }
+
       // Filter out empty highlights, included, excluded items, and images
       const tripData = {
-        ...newTrip,
+        title: newTrip.title.trim(),
+        description: newTrip.description.trim(),
+        shortDescription: newTrip.description.substring(0, 200).trim(),
+        duration: parseInt(newTrip.duration),
+        price: parseFloat(newTrip.price),
+        maxParticipants: parseInt(newTrip.maxParticipants),
+        category: newTrip.category,
+        location: newTrip.location || 'Location not specified',
+        difficulty: newTrip.difficulty || 'easy',
         highlights: (newTrip.highlights || []).filter(h => h.trim() !== ''),
         included: (newTrip.included || []).filter(i => i.trim() !== ''),
         excluded: (newTrip.excluded || []).filter(e => e.trim() !== ''),
         images: (newTrip.images || []).filter(img => img.trim() !== ''),
-        languages: newTrip.languages || ['English'],
-        price: parseFloat(newTrip.price),
-        maxParticipants: parseInt(newTrip.maxParticipants),
-        duration: parseInt(newTrip.duration)
+        requirements: newTrip.requirements ? [newTrip.requirements] : [],
+        cancellationPolicy: newTrip.cancellationPolicy || 'moderate',
+        cancellationDetails: newTrip.cancellationDetails || ''
       };
+      
+      console.log('Sending trip data:', tripData);
       
       await staffService.createTrip(tripData);
       toast.success('Trip created successfully');
@@ -310,15 +384,16 @@ const TripManagement = () => {
       duration: '',
       price: 0,
       maxParticipants: 1,
-      category: 'Cultural',
+      category: 'cultural',
       location: '',
-      difficulty: 'Easy',
+      difficulty: 'easy',
       languages: ['English'],
       highlights: [],
       included: [],
       excluded: [],
       requirements: '',
-      cancellationPolicy: '',
+      cancellationPolicy: 'moderate',
+      cancellationDetails: '',
       images: []
     });
   };
@@ -488,11 +563,14 @@ const TripManagement = () => {
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">All Categories</option>
-                <option value="Cultural">Cultural</option>
-                <option value="Adventure">Adventure</option>
-                <option value="Nature">Nature</option>
-                <option value="Beach">Beach</option>
-                <option value="Wildlife">Wildlife</option>
+                <option value="cultural">Cultural</option>
+                <option value="adventure">Adventure</option>
+                <option value="nature">Nature</option>
+                <option value="beach">Beach</option>
+                <option value="wildlife">Wildlife</option>
+                <option value="historical">Historical</option>
+                <option value="religious">Religious</option>
+                <option value="culinary">Culinary</option>
               </select>
             </div>
 
@@ -618,15 +696,33 @@ const TripManagement = () => {
                       <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden">
                         {trip.images && trip.images.length > 0 ? (
                           <img
-                            src={trip.images[0]}
+                            src={typeof trip.images[0] === 'string' ? trip.images[0] : trip.images[0]?.url}
                             alt={trip.title}
                             className="w-full h-full object-cover"
+                            onError={(e) => {
+                              console.error('Image failed to load:', {
+                                tripTitle: trip.title,
+                                imageSrc: e.target.src,
+                                imagesData: trip.images,
+                                imageType: typeof trip.images[0]
+                              });
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                            onLoad={() => {
+                              console.log('Image loaded successfully:', {
+                                tripTitle: trip.title,
+                                imageSrc: typeof trip.images[0] === 'string' ? trip.images[0] : trip.images[0]?.url
+                              });
+                            }}
                           />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Camera className="h-6 w-6 text-slate-400" />
-                          </div>
-                        )}
+                        ) : null}
+                        <div 
+                          className="w-full h-full flex items-center justify-center"
+                          style={{ display: (trip.images && trip.images.length > 0) ? 'none' : 'flex' }}
+                        >
+                          <Camera className="h-6 w-6 text-slate-400" />
+                        </div>
                       </div>
 
                       <div className="flex-1">
@@ -847,14 +943,14 @@ const TripManagement = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         required
                       >
-                        <option value="Cultural">Cultural</option>
-                        <option value="Adventure">Adventure</option>
-                        <option value="Nature">Nature</option>
-                        <option value="Historical">Historical</option>
-                        <option value="Religious">Religious</option>
-                        <option value="Wildlife">Wildlife</option>
-                        <option value="Beach">Beach</option>
-                        <option value="City">City</option>
+                        <option value="cultural">Cultural</option>
+                        <option value="adventure">Adventure</option>
+                        <option value="nature">Nature</option>
+                        <option value="historical">Historical</option>
+                        <option value="religious">Religious</option>
+                        <option value="wildlife">Wildlife</option>
+                        <option value="beach">Beach</option>
+                        <option value="culinary">Culinary</option>
                       </select>
                     </div>
                     <div>
@@ -1091,12 +1187,26 @@ const TripManagement = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Cancellation Policy</label>
-                      <textarea
+                      <select
                         value={newTrip.cancellationPolicy}
                         onChange={(e) => setNewTrip({ ...newTrip, cancellationPolicy: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      >
+                        <option value="">Select cancellation policy</option>
+                        <option value="flexible">Flexible - Free cancellation up to 24 hours before</option>
+                        <option value="moderate">Moderate - Free cancellation up to 7 days before</option>
+                        <option value="strict">Strict - No refunds, only rescheduling</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Cancellation Details</label>
+                      <textarea
+                        value={newTrip.cancellationDetails || ''}
+                        onChange={(e) => setNewTrip({ ...newTrip, cancellationDetails: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         rows="3"
-                        placeholder="Describe the cancellation and refund policy..."
+                        placeholder="Additional details about cancellation and refund policy..."
                       />
                     </div>
                   </div>
@@ -1197,6 +1307,390 @@ const TripManagement = () => {
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Create Trip
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Trip Modal */}
+      {showEditModal && selectedTrip && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">Edit Trip</h3>
+                  <p className="text-gray-600">Update trip information and details</p>
+                </div>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateTrip} className="space-y-6">
+                {/* Basic Information */}
+                <div className="bg-gray-50 rounded-xl p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Trip Title *</label>
+                      <input
+                        type="text"
+                        value={newTrip.title}
+                        onChange={(e) => setNewTrip({ ...newTrip, title: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Enter trip title"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                      <select
+                        value={newTrip.category}
+                        onChange={(e) => setNewTrip({ ...newTrip, category: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      >
+                        <option value="cultural">Cultural</option>
+                        <option value="adventure">Adventure</option>
+                        <option value="nature">Nature</option>
+                        <option value="historical">Historical</option>
+                        <option value="religious">Religious</option>
+                        <option value="wildlife">Wildlife</option>
+                        <option value="beach">Beach</option>
+                        <option value="culinary">Culinary</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Duration (days) *</label>
+                      <input
+                        type="number"
+                        value={newTrip.duration}
+                        onChange={(e) => setNewTrip({ ...newTrip, duration: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Enter duration in days"
+                        min="1"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Price (LKR) *</label>
+                      <input
+                        type="number"
+                        value={newTrip.price}
+                        onChange={(e) => setNewTrip({ ...newTrip, price: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Enter price in LKR"
+                        min="0"
+                        step="0.01"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Max Participants *</label>
+                      <input
+                        type="number"
+                        value={newTrip.maxParticipants}
+                        onChange={(e) => setNewTrip({ ...newTrip, maxParticipants: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Maximum number of participants"
+                        min="1"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
+                      <select
+                        value={newTrip.difficulty}
+                        onChange={(e) => setNewTrip({ ...newTrip, difficulty: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="easy">Easy</option>
+                        <option value="moderate">Moderate</option>
+                        <option value="challenging">Challenging</option>
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                      <input
+                        type="text"
+                        value={newTrip.location}
+                        onChange={(e) => setNewTrip({ ...newTrip, location: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Enter location (e.g., Kandy, Sri Lanka)"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+                      <textarea
+                        value={newTrip.description}
+                        onChange={(e) => setNewTrip({ ...newTrip, description: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        rows="4"
+                        placeholder="Describe the trip experience..."
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Trip Details */}
+                <div className="bg-gray-50 rounded-xl p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Trip Details</h4>
+                  <div className="space-y-6">
+                    {/* Highlights */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Highlights</label>
+                      <div className="space-y-3">
+                        {(newTrip.highlights || []).map((highlight, index) => (
+                          <div key={index} className="flex items-center space-x-3">
+                            <input
+                              type="text"
+                              value={highlight}
+                              onChange={(e) => {
+                                const newHighlights = [...(newTrip.highlights || [])];
+                                newHighlights[index] = e.target.value;
+                                setNewTrip({ ...newTrip, highlights: newHighlights });
+                              }}
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder="Enter highlight"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newHighlights = (newTrip.highlights || []).filter((_, i) => i !== index);
+                                setNewTrip({ ...newTrip, highlights: newHighlights });
+                              }}
+                              className="p-2 text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setNewTrip({ ...newTrip, highlights: [...(newTrip.highlights || []), ''] })}
+                          className="flex items-center px-3 py-2 text-blue-600 hover:text-blue-800"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Highlight
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Included Items */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Included Items</label>
+                      <div className="space-y-3">
+                        {(newTrip.included || []).map((item, index) => (
+                          <div key={index} className="flex items-center space-x-3">
+                            <input
+                              type="text"
+                              value={item}
+                              onChange={(e) => {
+                                const newIncluded = [...(newTrip.included || [])];
+                                newIncluded[index] = e.target.value;
+                                setNewTrip({ ...newTrip, included: newIncluded });
+                              }}
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder="Enter included item"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newIncluded = (newTrip.included || []).filter((_, i) => i !== index);
+                                setNewTrip({ ...newTrip, included: newIncluded });
+                              }}
+                              className="p-2 text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setNewTrip({ ...newTrip, included: [...(newTrip.included || []), ''] })}
+                          className="flex items-center px-3 py-2 text-blue-600 hover:text-blue-800"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Included Item
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Excluded Items */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Excluded Items</label>
+                      <div className="space-y-3">
+                        {(newTrip.excluded || []).map((item, index) => (
+                          <div key={index} className="flex items-center space-x-3">
+                            <input
+                              type="text"
+                              value={item}
+                              onChange={(e) => {
+                                const newExcluded = [...(newTrip.excluded || [])];
+                                newExcluded[index] = e.target.value;
+                                setNewTrip({ ...newTrip, excluded: newExcluded });
+                              }}
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder="Enter excluded item"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newExcluded = (newTrip.excluded || []).filter((_, i) => i !== index);
+                                setNewTrip({ ...newTrip, excluded: newExcluded });
+                              }}
+                              className="p-2 text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setNewTrip({ ...newTrip, excluded: [...(newTrip.excluded || []), ''] })}
+                          className="flex items-center px-3 py-2 text-blue-600 hover:text-blue-800"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Excluded Item
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Information */}
+                <div className="bg-gray-50 rounded-xl p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Additional Information</h4>
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Requirements</label>
+                      <textarea
+                        value={newTrip.requirements}
+                        onChange={(e) => setNewTrip({ ...newTrip, requirements: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        rows="3"
+                        placeholder="What participants need to bring or prepare..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Cancellation Policy</label>
+                      <select
+                        value={newTrip.cancellationPolicy}
+                        onChange={(e) => setNewTrip({ ...newTrip, cancellationPolicy: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      >
+                        <option value="">Select cancellation policy</option>
+                        <option value="flexible">Flexible - Free cancellation up to 24 hours before</option>
+                        <option value="moderate">Moderate - Free cancellation up to 7 days before</option>
+                        <option value="strict">Strict - No refunds, only rescheduling</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Cancellation Details</label>
+                      <textarea
+                        value={newTrip.cancellationDetails || ''}
+                        onChange={(e) => setNewTrip({ ...newTrip, cancellationDetails: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        rows="3"
+                        placeholder="Additional details about cancellation and refund policy..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Trip Images */}
+                <div className="bg-gray-50 rounded-xl p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Trip Images</h4>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Image URLs</label>
+                      <p className="text-sm text-gray-500 mb-3">
+                        Add image URLs (recommended: Unsplash links for high-quality photos)
+                      </p>
+                      <div className="space-y-3">
+                        {(newTrip.images || []).map((image, index) => (
+                          <div key={index} className="flex items-center space-x-3">
+                            <div className="flex-1">
+                              <input
+                                type="url"
+                                value={image}
+                                onChange={(e) => {
+                                  const newImages = [...(newTrip.images || [])];
+                                  newImages[index] = e.target.value;
+                                  setNewTrip({ ...newTrip, images: newImages });
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="https://images.unsplash.com/photo-..."
+                              />
+                            </div>
+                            <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                              {image ? (
+                                <img
+                                  src={image}
+                                  alt={`Trip image ${index + 1}`}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
+                              <div
+                                className="w-full h-full flex items-center justify-center text-gray-400"
+                                style={{ display: image ? 'none' : 'flex' }}
+                              >
+                                <Camera className="h-6 w-6" />
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newImages = (newTrip.images || []).filter((_, i) => i !== index);
+                                setNewTrip({ ...newTrip, images: newImages });
+                              }}
+                              className="p-2 text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setNewTrip({ ...newTrip, images: [...(newTrip.images || []), ''] })}
+                          className="flex items-center px-3 py-2 text-blue-600 hover:text-blue-800"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Image URL
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form Actions */}
+                <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="px-6 py-2 text-gray-600 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Update Trip
                   </button>
                 </div>
               </form>

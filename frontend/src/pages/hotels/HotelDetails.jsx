@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useHotel } from '../../context/hotels/HotelContext';
 import { hotelAPI, roomAPI, hotelUtils } from '../../services/hotels/hotelService';
+import hotelReviewService from '../../services/hotels/hotelReviewService';
+import { useAuth } from '../../context/AuthContext';
 import { 
   Star, 
   MapPin, 
@@ -28,7 +30,10 @@ import {
   Heart,
   Share2,
   Navigation,
-  Camera
+  Camera,
+  MessageSquare,
+  Plus,
+  X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -36,6 +41,7 @@ const HotelDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { hotelActions } = useHotel();
+  const { user, isAuthenticated } = useAuth();
   
   const [hotel, setHotel] = useState(null);
   const [rooms, setRooms] = useState([]);
@@ -52,6 +58,13 @@ const HotelDetails = () => {
     infants: 0,
     specialRequests: ''
   });
+  
+  // Review-related state
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [canUserReview, setCanUserReview] = useState(false);
+  const [reviewEligibility, setReviewEligibility] = useState(null);
 
   const amenityIcons = {
     wifi: Wifi,
@@ -88,7 +101,11 @@ const HotelDetails = () => {
   useEffect(() => {
     fetchHotelDetails();
     fetchRooms();
-  }, [id]);
+    fetchReviews();
+    if (isAuthenticated) {
+      checkReviewEligibility();
+    }
+  }, [id, isAuthenticated]);
 
   const fetchHotelDetails = async () => {
     try {
@@ -199,6 +216,44 @@ const HotelDetails = () => {
       plantationTour: 'Plantation Tour'
     };
     return labels[amenity] || amenity;
+  };
+
+  // Review-related functions
+  const fetchReviews = async () => {
+    try {
+      setReviewsLoading(true);
+      const response = await hotelReviewService.getHotelReviews(id, {
+        page: 1,
+        limit: 10,
+        sortBy: 'createdAt',
+        sortOrder: 'desc'
+      });
+      setReviews(response.data.reviews);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      toast.error('Failed to load reviews');
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  const checkReviewEligibility = async () => {
+    try {
+      const response = await hotelReviewService.canUserReview(id);
+      setCanUserReview(response.data.canReview);
+      setReviewEligibility(response.data);
+    } catch (error) {
+      console.error('Error checking review eligibility:', error);
+      setCanUserReview(false);
+    }
+  };
+
+  const handleReviewSubmitted = () => {
+    setShowReviewForm(false);
+    fetchReviews();
+    checkReviewEligibility();
+    // Refresh hotel data to update ratings
+    fetchHotelDetails();
   };
 
   if (loading) {
@@ -502,7 +557,240 @@ const HotelDetails = () => {
             </div>
           )}
         </div>
+
+        {/* Reviews Section */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold">Guest Reviews</h2>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center">
+                <Star className="w-5 h-5 text-yellow-400 fill-current" />
+                <span className="ml-2 font-semibold">{hotelUtils.getRatingDisplay(hotel.ratings.overall)}</span>
+                <span className="ml-2 text-gray-600">({hotel.reviewCount} reviews)</span>
+              </div>
+              {isAuthenticated && canUserReview && (
+                <button
+                  onClick={() => setShowReviewForm(true)}
+                  className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Write Review</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Review Eligibility Messages */}
+          {isAuthenticated && !canUserReview && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <MessageSquare className="w-5 h-5 text-yellow-600 mr-2" />
+                <div>
+                  <p className="text-yellow-800 font-medium mb-1">Review Requirements</p>
+                  <p className="text-yellow-700 text-sm">
+                    {reviewEligibility?.reason || 'Complete a stay to write a review'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!isAuthenticated && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <MessageSquare className="w-5 h-5 text-blue-600 mr-2" />
+                <div>
+                  <p className="text-blue-800 font-medium mb-1">Sign in to write a review</p>
+                  <p className="text-blue-700 text-sm">You need to be signed in to write reviews</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reviews List */}
+          {reviewsLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : reviews.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p>No reviews yet. Be the first to review this hotel!</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {reviews.map((review) => (
+                <div key={review._id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <span className="text-blue-600 font-semibold">
+                          {review.user?.firstName?.charAt(0) || 'G'}
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">
+                          {review.user?.firstName} {review.user?.lastName}
+                        </h4>
+                        <div className="flex items-center space-x-2">
+                          <div className="flex items-center">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`w-4 h-4 ${
+                                  i < review.rating.overall ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-sm text-gray-600">
+                            {new Date(review.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {review.isVerified && (
+                      <div className="flex items-center text-green-600">
+                        <CheckCircle className="w-4 h-4 mr-1" />
+                        <span className="text-sm">Verified</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-gray-700 mb-4">{review.content}</p>
+
+                  {/* Detailed Ratings */}
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Cleanliness</span>
+                      <div className="flex items-center">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-3 h-3 ${
+                              i < review.rating.cleanliness ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Location</span>
+                      <div className="flex items-center">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-3 h-3 ${
+                              i < review.rating.location ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Service</span>
+                      <div className="flex items-center">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-3 h-3 ${
+                              i < review.rating.service ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Value</span>
+                      <div className="flex items-center">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-3 h-3 ${
+                              i < review.rating.value ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Amenities</span>
+                      <div className="flex items-center">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-3 h-3 ${
+                              i < review.rating.amenities ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Review Photos */}
+                  {review.photos && review.photos.length > 0 && (
+                    <div className="mt-4">
+                      <div className="flex space-x-2 overflow-x-auto">
+                        {review.photos.map((photo, index) => (
+                          <img
+                            key={index}
+                            src={photo.url}
+                            alt={`Review photo ${index + 1}`}
+                            className="w-20 h-20 object-cover rounded-lg flex-shrink-0"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Review Tags */}
+                  {review.tags && review.tags.length > 0 && (
+                    <div className="mt-4">
+                      <div className="flex flex-wrap gap-2">
+                        {review.tags.map((tag, index) => (
+                          <span
+                            key={index}
+                            className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
+                          >
+                            {tag.replace('-', ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Review Form Modal */}
+      {showReviewForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold">Write a Review</h3>
+              <button
+                onClick={() => setShowReviewForm(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            {/* Import and use the existing hotel ReviewForm component */}
+            <div className="text-center py-8">
+              <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p className="text-gray-600">Review form will be implemented here</p>
+              <p className="text-sm text-gray-500 mt-2">
+                This will use the existing hotel ReviewForm component
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Booking Form Modal */}
       {showBookingForm && (
