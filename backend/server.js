@@ -52,6 +52,7 @@ const hotelRoutes = require('./src/routes/hotels/hotels');
 const roomRoutes = require('./src/routes/hotels/rooms');
 const hotelBookingRoutes = require('./src/routes/hotels/hotelBookingRoutes');
 const roomAvailabilityRoutes = require('./src/routes/hotels/roomAvailabilityRoutes');
+const hotelReviewRoutes = require('./src/routes/hotels/hotelReviewRoutes');
 
 // Custom trip routes
 const customTripRoutes = require('./src/routes/customTrips');
@@ -152,6 +153,7 @@ app.use('/api/hotels', hotelRoutes);
 app.use('/api/hotels', roomRoutes); // Mount room routes under /api/hotels
 app.use('/api', roomAvailabilityRoutes); // Mount room availability routes under /api
 app.use('/api/hotel-bookings', hotelBookingRoutes); // Mount hotel booking routes under /api/hotel-bookings
+app.use('/api/hotel-reviews', hotelReviewRoutes); // Mount hotel review routes under /api/hotel-reviews
 
 // Vehicle API routes
 app.use('/api/vehicles', vehicleRoutes);
