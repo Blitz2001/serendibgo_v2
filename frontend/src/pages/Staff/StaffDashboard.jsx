@@ -172,12 +172,10 @@ import TripManagement from './components/TripManagement'
 import CustomTripApproval from './components/CustomTripApproval'
 import HotelManagement from './components/HotelManagement'
 import GuideManagement from './components/GuideManagement'
-import VehicleManagement from './components/VehicleManagement'
 import DriverVehicleManagement from './components/DriverVehicleManagement'
 import SupportManagement from './components/SupportManagement'
 import ReviewManagement from './components/ReviewManagement'
 import AnalyticsManagement from './components/AnalyticsManagement'
-import SettingsManagement from './components/SettingsManagement'
 import ApprovalManagement from '../../components/staff/management/ApprovalManagement'
 import BookingManagement from '../../components/staff/management/BookingManagement'
 import FinancialManagement from '../../components/staff/management/FinancialManagement'
@@ -208,8 +206,7 @@ const StaffDashboard = () => {
     pendingReviews: 0,
     supportTickets: 0,
     newGuides: 0,
-    newHotels: 0,
-    newVehicles: 0
+    newHotels: 0
   })
   const [dashboardLoading, setDashboardLoading] = useState(true)
 
@@ -254,8 +251,7 @@ const StaffDashboard = () => {
             pendingReviews: data.pendingReviews || 0,
             supportTickets: data.supportTickets || 0,
             newGuides: data.newGuides || 0,
-            newHotels: data.newHotels || 0,
-            newVehicles: data.newVehicles || 0
+            newHotels: data.newHotels || 0
           })
         }
       } catch (error) {
@@ -304,14 +300,12 @@ const StaffDashboard = () => {
     { id: 'financial', label: 'Financial', icon: DollarSign },
     { id: 'trips', label: 'Trip Management', icon: Map },
     { id: 'custom-trips', label: 'Custom Trips', icon: Compass },
-    { id: 'vehicles', label: 'Vehicles', icon: Car },
     { id: 'drivers', label: 'Driver Management', icon: UserCheck },
     { id: 'guides', label: 'Guides', icon: UserCheck },
     { id: 'hotels', label: 'Hotels', icon: Building },
     { id: 'support', label: 'Support', icon: Headphones },
     { id: 'reviews', label: 'Reviews', icon: Star },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'settings', label: 'Settings', icon: Settings }
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 }
   ]
 
   const handleTabClick = (tabId) => {
@@ -395,16 +389,6 @@ const StaffDashboard = () => {
                       <p className="text-xs text-slate-500">{user?.email}</p>
                       <p className="text-xs text-blue-600 font-medium">Staff Member</p>
                     </div>
-                    <button
-                      onClick={() => {
-                        setActiveTab('settings')
-                        setIsProfileDropdownOpen(false)
-                      }}
-                      className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                    >
-                      <Settings className="h-4 w-4 mr-3" />
-                      Settings
-                    </button>
                     <button
                       onClick={() => {
                         navigate('/')
@@ -687,17 +671,6 @@ const StaffDashboard = () => {
                     </button>
 
                     <button
-                      onClick={() => setActiveTab('vehicles')}
-                      className="p-6 border-2 border-slate-200 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition-all duration-200 text-left group"
-                    >
-                      <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-purple-200 transition-colors">
-                        <Car className="h-6 w-6 text-purple-600" />
-                      </div>
-                      <h3 className="font-semibold text-slate-900 mb-2">Manage Vehicles</h3>
-                      <p className="text-sm text-slate-600">Approve and manage vehicle listings</p>
-                    </button>
-
-                    <button
                       onClick={() => setActiveTab('support')}
                       className="p-6 border-2 border-slate-200 rounded-xl hover:border-yellow-500 hover:bg-yellow-50 transition-all duration-200 text-left group"
                     >
@@ -910,13 +883,6 @@ const StaffDashboard = () => {
               </div>
             )}
 
-            {/* Vehicle Management Tab */}
-            {activeTab === 'vehicles' && (
-              <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
-                <VehicleManagement />
-              </div>
-            )}
-
             {/* Support Management Tab */}
             {activeTab === 'support' && (
               <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
@@ -938,15 +904,8 @@ const StaffDashboard = () => {
               </div>
             )}
 
-            {/* Settings Management Tab */}
-            {activeTab === 'settings' && (
-              <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
-                <SettingsManagement />
-              </div>
-            )}
-
             {/* Other tabs will be implemented in separate components */}
-            {activeTab !== 'overview' && activeTab !== 'approvals' && activeTab !== 'bookings' && activeTab !== 'financial' && activeTab !== 'trips' && activeTab !== 'custom-trips' && activeTab !== 'hotels' && activeTab !== 'guides' && activeTab !== 'vehicles' && activeTab !== 'drivers' && activeTab !== 'support' && activeTab !== 'reviews' && activeTab !== 'analytics' && activeTab !== 'settings' && (
+            {activeTab !== 'overview' && activeTab !== 'approvals' && activeTab !== 'bookings' && activeTab !== 'financial' && activeTab !== 'trips' && activeTab !== 'custom-trips' && activeTab !== 'hotels' && activeTab !== 'guides' && activeTab !== 'drivers' && activeTab !== 'support' && activeTab !== 'reviews' && activeTab !== 'analytics' && (
               <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
                 <div className="text-center py-12">
                   <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">

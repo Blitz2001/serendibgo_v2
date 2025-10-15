@@ -1,5 +1,5 @@
 // Staff Booking Management Component
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Calendar,
   Clock,
@@ -66,7 +66,7 @@ const BookingManagement = () => {
   });
 
   // Fetch bookings
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     if (!isAuthenticated) return;
     
     setLoading(true);
@@ -77,7 +77,9 @@ const BookingManagement = () => {
       };
       if (searchTerm) params.search = searchTerm;
       
+      console.log('🔍 Fetching bookings with params:', params);
       const data = await staffService.getBookings(params);
+      console.log('📊 Received bookings:', data.data.bookings.length);
       setBookings(data.data.bookings);
       setPagination(data.data.pagination);
     } catch (error) {
@@ -86,10 +88,10 @@ const BookingManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAuthenticated, pagination.current, filters, searchTerm]);
 
   // Fetch statistics
-  const fetchStatistics = async () => {
+  const fetchStatistics = useCallback(async () => {
     if (!isAuthenticated) return;
     
     try {
@@ -98,14 +100,27 @@ const BookingManagement = () => {
     } catch (error) {
       console.error('Fetch statistics error:', error);
     }
-  };
+  }, [isAuthenticated]);
 
+  // Debounced search effect
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (isAuthenticated && !isLoading) {
+        fetchBookings();
+        fetchStatistics();
+      }
+    }, 500); // 500ms delay for search
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, isAuthenticated, isLoading]);
+
+  // Effect for other filters (immediate)
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
       fetchBookings();
       fetchStatistics();
     }
-  }, [filters, searchTerm, pagination.current, isAuthenticated, isLoading]);
+  }, [filters.status, filters.type, filters.dateFrom, filters.dateTo, pagination.current, isAuthenticated, isLoading]);
 
   // Handle booking update
   const handleUpdateBooking = async (bookingId, updateData) => {
@@ -306,6 +321,15 @@ const BookingManagement = () => {
       {/* Filters */}
       {showFilters && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-slate-800">Filter Bookings</h3>
+            {loading && (
+              <div className="flex items-center text-sm text-slate-500">
+                <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                Applying filters...
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Search</label>
@@ -369,6 +393,31 @@ const BookingManagement = () => {
                 onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+            </div>
+          </div>
+          
+          {/* Filter Actions */}
+          <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  setFilters({
+                    status: 'all',
+                    type: 'all',
+                    dateFrom: '',
+                    dateTo: '',
+                    sortBy: 'createdAt',
+                    sortOrder: 'desc'
+                  });
+                  setSearchTerm('');
+                }}
+                className="px-3 py-1 text-sm text-slate-600 hover:text-slate-800 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Clear All Filters
+              </button>
+            </div>
+            <div className="text-sm text-slate-500">
+              {bookings.length} bookings found
             </div>
           </div>
         </div>
