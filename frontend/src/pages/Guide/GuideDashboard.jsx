@@ -152,18 +152,23 @@ const GuideDashboard = () => {
   // Fetch bookings function
   const fetchBookings = async () => {
     try {
+      console.log('🔍 Guide Dashboard - Fetching bookings for user:', user?.id || user?._id, user?.firstName, user?.role)
       setBookingsLoading(true)
       setBookingsError('')
       
       const response = await guideService.getGuideBookings({ status: bookingsFilter === 'all' ? '' : bookingsFilter })
       
+      console.log('📊 Guide Dashboard - API Response:', response)
+      
       if (response.success) {
+        console.log('✅ Guide Dashboard - Bookings fetched successfully:', response.data.bookings?.length || 0, 'bookings')
         setBookings(response.data.bookings || [])
       } else {
+        console.error('❌ Guide Dashboard - Failed to fetch bookings:', response.message)
         setBookingsError(response.message || 'Failed to fetch bookings')
       }
     } catch (error) {
-      console.error('Error fetching bookings:', error)
+      console.error('❌ Guide Dashboard - Error fetching bookings:', error)
       setBookingsError('Failed to fetch bookings')
     } finally {
       setBookingsLoading(false)
@@ -328,24 +333,28 @@ const GuideDashboard = () => {
 
   // Fetch guide stats when component loads
   useEffect(() => {
-    if (user?.id) {
+    if (user?.id || user?._id) {
       fetchGuideStats()
     }
-  }, [user?.id])
+  }, [user?.id, user?._id])
 
   // Fetch bookings when bookings tab is active or filter changes
   useEffect(() => {
-    if (activeTab === 'bookings' && user?.id) {
+    console.log('🔄 useEffect triggered - activeTab:', activeTab, 'user.id:', user?.id, 'user._id:', user?._id)
+    if (activeTab === 'bookings' && (user?.id || user?._id)) {
+      console.log('📋 Fetching bookings for bookings tab')
       fetchBookings()
     }
-  }, [activeTab, bookingsFilter, user?.id])
+  }, [activeTab, bookingsFilter, user?.id, user?._id])
 
   // Fetch bookings for overview tab
   useEffect(() => {
-    if (activeTab === 'overview' && user?.id) {
+    console.log('🔄 useEffect triggered - activeTab:', activeTab, 'user.id:', user?.id, 'user._id:', user?._id)
+    if (activeTab === 'overview' && (user?.id || user?._id)) {
+      console.log('📋 Fetching bookings for overview tab')
       fetchBookings()
     }
-  }, [activeTab, user?.id])
+  }, [activeTab, user?.id, user?._id])
 
   const showMessage = (type, text) => {
     setMessage({ type, text })
@@ -1387,16 +1396,20 @@ const GuideDashboard = () => {
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                       {bookings.map((booking) => (
-                        <div key={booking._id} id={`booking-${booking._id}`} className="border border-slate-200 rounded-xl p-6 hover:shadow-md transition-shadow">
-                          <div className="flex items-start justify-between mb-4">
+                        <div key={booking._id} id={`booking-${booking._id}`} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-200">
+                          <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <div className="flex items-center space-x-3 mb-2">
-                                <h3 className="text-lg font-semibold text-slate-900">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <BookOpen className="h-5 w-5 text-blue-600" />
+                                <h3 className="text-lg font-semibold text-gray-900">
                                   {booking.tour?.title || 'Custom Tour'}
                                 </h3>
-                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              </div>
+                              
+                              <div className="flex items-center space-x-2 mb-4">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                   booking.status === 'confirmed' 
                                     ? 'bg-green-100 text-green-800'
                                     : booking.status === 'pending'
@@ -1405,114 +1418,140 @@ const GuideDashboard = () => {
                                     ? 'bg-blue-100 text-blue-800'
                                     : 'bg-red-100 text-red-800'
                                 }`}>
-                                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                                  {booking.status === 'confirmed' && <CheckCircle className="h-3 w-3 mr-1" />}
+                                  {booking.status === 'pending' && <Clock className="h-3 w-3 mr-1" />}
+                                  {booking.status === 'completed' && <CheckCircle className="h-3 w-3 mr-1" />}
+                                  {booking.status === 'cancelled' && <XCircle className="h-3 w-3 mr-1" />}
+                                  <span className="ml-1">{booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}</span>
                                 </span>
-                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                   booking.paymentStatus === 'paid' 
                                     ? 'bg-green-100 text-green-800'
                                     : booking.paymentStatus === 'pending'
                                     ? 'bg-yellow-100 text-yellow-800'
                                     : 'bg-red-100 text-red-800'
                                 }`}>
-                                  {booking.paymentStatus.charAt(0).toUpperCase() + booking.paymentStatus.slice(1)}
+                                  {booking.paymentStatus === 'paid' && <CheckCircle className="h-3 w-3 mr-1" />}
+                                  {booking.paymentStatus === 'pending' && <Clock className="h-3 w-3 mr-1" />}
+                                  {booking.paymentStatus === 'refunded' && <XCircle className="h-3 w-3 mr-1" />}
+                                  <span className="ml-1">{booking.paymentStatus.charAt(0).toUpperCase() + booking.paymentStatus.slice(1)}</span>
                                 </span>
                               </div>
                               
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-slate-600">
-                                <div className="flex items-center">
-                                  <User className="h-4 w-4 mr-2 text-slate-400" />
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <User className="h-4 w-4 mr-2" />
                                   <span className="font-medium">Customer:</span>
-                                  <span className="ml-2">{booking.user?.firstName} {booking.user?.lastName}</span>
+                                  <span className="ml-1">{booking.user?.firstName} {booking.user?.lastName}</span>
                                 </div>
                                 
-                                <div className="flex items-center">
-                                  <Calendar className="h-4 w-4 mr-2 text-slate-400" />
-                                  <span className="font-medium">Start Date:</span>
-                                  <span className="ml-2">{new Date(booking.startDate).toLocaleDateString()}</span>
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <Calendar className="h-4 w-4 mr-2" />
+                                  <span className="font-medium">Start:</span>
+                                  <span className="ml-1">{new Date(booking.startDate).toLocaleDateString()}</span>
                                 </div>
                                 
-                                <div className="flex items-center">
-                                  <Calendar className="h-4 w-4 mr-2 text-slate-400" />
-                                  <span className="font-medium">End Date:</span>
-                                  <span className="ml-2">{new Date(booking.endDate).toLocaleDateString()}</span>
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <Calendar className="h-4 w-4 mr-2" />
+                                  <span className="font-medium">End:</span>
+                                  <span className="ml-1">{new Date(booking.endDate).toLocaleDateString()}</span>
                                 </div>
                                 
-                                <div className="flex items-center">
-                                  <Clock className="h-4 w-4 mr-2 text-slate-400" />
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <Clock className="h-4 w-4 mr-2" />
                                   <span className="font-medium">Duration:</span>
-                                  <span className="ml-2 capitalize">{booking.duration}</span>
+                                  <span className="ml-1 capitalize">{booking.duration?.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
                                 </div>
                                 
-                                <div className="flex items-center">
-                                  <Users className="h-4 w-4 mr-2 text-slate-400" />
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <Users className="h-4 w-4 mr-2" />
                                   <span className="font-medium">Group Size:</span>
-                                  <span className="ml-2">{booking.groupSize} people</span>
+                                  <span className="ml-1">{booking.groupSize} {booking.groupSize === 1 ? 'person' : 'people'}</span>
                                 </div>
                                 
-                                <div className="flex items-center">
-                                  <DollarSign className="h-4 w-4 mr-2 text-slate-400" />
-                                  <span className="font-medium">Total Amount:</span>
-                                  <span className="ml-2 font-semibold text-green-600">LKR {booking.totalAmount?.toLocaleString()}</span>
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <MapPin className="h-4 w-4 mr-2" />
+                                  <span className="font-medium">Location:</span>
+                                  <span className="ml-1">{booking.tour?.location?.name || 'Sri Lanka'}</span>
+                                </div>
+                                
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <Phone className="h-4 w-4 mr-2" />
+                                  <span className="font-medium">Contact:</span>
+                                  <span className="ml-1">{booking.user?.phone || 'N/A'}</span>
+                                </div>
+                                
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <Mail className="h-4 w-4 mr-2" />
+                                  <span className="font-medium">Email:</span>
+                                  <span className="ml-1">{booking.user?.email || 'N/A'}</span>
                                 </div>
                               </div>
                               
                               {booking.specialRequests && (
-                                <div className="mt-4 p-3 bg-slate-50 rounded-lg">
+                                <div className="mt-3 text-sm text-gray-600">
                                   <div className="flex items-start">
-                                    <FileText className="h-4 w-4 mr-2 text-slate-400 mt-0.5" />
+                                    <FileText className="h-4 w-4 mr-2 mt-0.5" />
                                     <div>
-                                      <span className="font-medium text-slate-700">Special Requests:</span>
-                                      <p className="text-slate-600 mt-1">{booking.specialRequests}</p>
+                                      <strong>Special Requests:</strong> {booking.specialRequests}
                                     </div>
                                   </div>
                                 </div>
                               )}
                               
-                              <div className="mt-4 flex items-center justify-between">
-                                <div className="text-xs text-slate-500">
-                                  Booking created: {new Date(booking.createdAt).toLocaleDateString()}
+                              {booking.bookingReference && (
+                                <div className="mt-2 text-xs text-gray-500">
+                                  <strong>Booking Reference:</strong> {booking.bookingReference}
                                 </div>
-                                
-                                <div className="flex items-center space-x-2">
-                                  <button
-                                    onClick={() => {
-                                      // Handle contact customer
-                                      if (booking.user?.email) {
-                                        window.open(`mailto:${booking.user.email}`, '_blank')
-                                      }
-                                    }}
-                                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm"
-                                  >
-                                    <Mail className="h-3 w-3 mr-1 inline" />
-                                    Contact
-                                  </button>
-                                  
-                                  {booking.user?.phone && (
-                                    <button
-                                      onClick={() => {
-                                        window.open(`tel:${booking.user.phone}`, '_self')
-                                      }}
-                                      className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm"
-                                    >
-                                      <Phone className="h-3 w-3 mr-1 inline" />
-                                      Call
-                                    </button>
-                                  )}
-
-                                  {/* Cancel button - only show for pending and confirmed bookings */}
-                                  {['pending', 'confirmed'].includes(booking.status) && (
-                                    <button
-                                      onClick={() => openCancelModal(booking)}
-                                      disabled={cancellingBooking === booking._id}
-                                      className="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                      <XCircle className="h-3 w-3 mr-1 inline" />
-                                      {cancellingBooking === booking._id ? 'Cancelling...' : 'Cancel'}
-                                    </button>
-                                  )}
-                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="ml-6 flex flex-col items-end">
+                              <div className="mt-2 flex items-center text-lg font-semibold text-gray-900">
+                                <DollarSign className="h-4 w-4 mr-1" />
+                                LKR {booking.totalAmount?.toLocaleString() || '0'}
+                              </div>
+                              <div className="mt-1 text-xs text-gray-500">
+                                Booking created: {new Date(booking.createdAt).toLocaleDateString()}
                               </div>
                             </div>
+                          </div>
+                          
+                          <div className="mt-4 flex justify-end space-x-3">
+                            <button
+                              onClick={() => {
+                                if (booking.user?.email) {
+                                  window.open(`mailto:${booking.user.email}`, '_blank')
+                                }
+                              }}
+                              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            >
+                              <Mail className="h-4 w-4 mr-2" />
+                              Contact
+                            </button>
+                            
+                            {booking.user?.phone && (
+                              <button
+                                onClick={() => {
+                                  window.open(`tel:${booking.user.phone}`, '_self')
+                                }}
+                                className="px-4 py-2 text-sm font-medium text-green-700 bg-green-50 border border-green-300 rounded-md hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                              >
+                                <Phone className="h-4 w-4 mr-2" />
+                                Call
+                              </button>
+                            )}
+
+                            {['pending', 'confirmed'].includes(booking.status) && (
+                              <button
+                                onClick={() => openCancelModal(booking)}
+                                disabled={cancellingBooking === booking._id}
+                                className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <XCircle className="h-4 w-4 mr-2" />
+                                {cancellingBooking === booking._id ? 'Cancelling...' : 'Cancel'}
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -1537,74 +1576,122 @@ const GuideDashboard = () => {
                     <p className="text-slate-500">You haven't cancelled any bookings yet.</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     {bookings.filter(booking => booking.status === 'cancelled').map((booking) => (
-                      <div key={booking._id} className="border border-red-200 rounded-xl p-6 bg-red-50">
-                        <div className="flex items-start justify-between mb-4">
+                      <div key={booking._id} className="bg-white rounded-lg shadow-sm border border-red-200 p-6 hover:shadow-md transition-all duration-200 bg-red-50">
+                        <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <div className="flex items-center space-x-3 mb-2">
-                              <h3 className="text-lg font-semibold text-slate-900">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <BookOpen className="h-5 w-5 text-red-600" />
+                              <h3 className="text-lg font-semibold text-gray-900">
                                 {booking.tour?.title || 'Custom Tour'}
                               </h3>
-                              <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                Cancelled
+                            </div>
+                            
+                            <div className="flex items-center space-x-2 mb-4">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                <XCircle className="h-3 w-3 mr-1" />
+                                <span className="ml-1">Cancelled</span>
+                              </span>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                booking.paymentStatus === 'refunded' 
+                                  ? 'bg-green-100 text-green-800'
+                                  : booking.paymentStatus === 'pending'
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {booking.paymentStatus === 'refunded' && <CheckCircle className="h-3 w-3 mr-1" />}
+                                {booking.paymentStatus === 'pending' && <Clock className="h-3 w-3 mr-1" />}
+                                <span className="ml-1">{booking.paymentStatus.charAt(0).toUpperCase() + booking.paymentStatus.slice(1)}</span>
                               </span>
                             </div>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-slate-600">
-                              <div className="flex items-center">
-                                <User className="h-4 w-4 mr-2 text-slate-400" />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                              <div className="flex items-center text-sm text-gray-600">
+                                <User className="h-4 w-4 mr-2" />
                                 <span className="font-medium">Customer:</span>
-                                <span className="ml-2">{booking.user?.firstName} {booking.user?.lastName}</span>
+                                <span className="ml-1">{booking.user?.firstName} {booking.user?.lastName}</span>
                               </div>
                               
-                              <div className="flex items-center">
-                                <Calendar className="h-4 w-4 mr-2 text-slate-400" />
-                                <span className="font-medium">Start Date:</span>
-                                <span className="ml-2">{new Date(booking.startDate).toLocaleDateString()}</span>
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Calendar className="h-4 w-4 mr-2" />
+                                <span className="font-medium">Start:</span>
+                                <span className="ml-1">{new Date(booking.startDate).toLocaleDateString()}</span>
                               </div>
                               
-                              <div className="flex items-center">
-                                <Calendar className="h-4 w-4 mr-2 text-slate-400" />
-                                <span className="font-medium">End Date:</span>
-                                <span className="ml-2">{new Date(booking.endDate).toLocaleDateString()}</span>
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Calendar className="h-4 w-4 mr-2" />
+                                <span className="font-medium">End:</span>
+                                <span className="ml-1">{new Date(booking.endDate).toLocaleDateString()}</span>
                               </div>
                               
-                              <div className="flex items-center">
-                                <Clock className="h-4 w-4 mr-2 text-slate-400" />
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Clock className="h-4 w-4 mr-2" />
                                 <span className="font-medium">Duration:</span>
-                                <span className="ml-2 capitalize">{booking.duration}</span>
+                                <span className="ml-1 capitalize">{booking.duration?.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
                               </div>
                               
-                              <div className="flex items-center">
-                                <Users className="h-4 w-4 mr-2 text-slate-400" />
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Users className="h-4 w-4 mr-2" />
                                 <span className="font-medium">Group Size:</span>
-                                <span className="ml-2">{booking.groupSize} people</span>
+                                <span className="ml-1">{booking.groupSize} {booking.groupSize === 1 ? 'person' : 'people'}</span>
                               </div>
                               
-                              <div className="flex items-center">
-                                <DollarSign className="h-4 w-4 mr-2 text-slate-400" />
-                                <span className="font-medium">Total Amount:</span>
-                                <span className="ml-2 font-semibold text-red-600">LKR {booking.totalAmount?.toLocaleString()}</span>
+                              <div className="flex items-center text-sm text-gray-600">
+                                <MapPin className="h-4 w-4 mr-2" />
+                                <span className="font-medium">Location:</span>
+                                <span className="ml-1">{booking.tour?.location?.name || 'Sri Lanka'}</span>
+                              </div>
+                              
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Phone className="h-4 w-4 mr-2" />
+                                <span className="font-medium">Contact:</span>
+                                <span className="ml-1">{booking.user?.phone || 'N/A'}</span>
+                              </div>
+                              
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Mail className="h-4 w-4 mr-2" />
+                                <span className="font-medium">Email:</span>
+                                <span className="ml-1">{booking.user?.email || 'N/A'}</span>
                               </div>
                             </div>
                             
-                            {booking.cancellationReason && (
-                              <div className="mt-4 p-3 bg-red-100 rounded-lg border border-red-200">
+                            {booking.specialRequests && (
+                              <div className="mt-3 text-sm text-gray-600">
                                 <div className="flex items-start">
-                                  <AlertTriangle className="h-4 w-4 mr-2 text-red-600 mt-0.5" />
+                                  <FileText className="h-4 w-4 mr-2 mt-0.5" />
                                   <div>
-                                    <span className="font-medium text-red-800">Cancellation Reason:</span>
-                                    <p className="text-red-700 mt-1">{booking.cancellationReason}</p>
+                                    <strong>Special Requests:</strong> {booking.specialRequests}
                                   </div>
                                 </div>
                               </div>
                             )}
                             
-                            <div className="mt-4 flex items-center justify-between">
-                              <div className="text-xs text-slate-500">
-                                Booking cancelled: {new Date(booking.updatedAt).toLocaleDateString()}
+                            {booking.cancellationReason && (
+                              <div className="mt-3 text-sm text-red-600">
+                                <div className="flex items-start">
+                                  <AlertTriangle className="h-4 w-4 mr-2 mt-0.5" />
+                                  <div>
+                                    <strong>Cancellation Reason:</strong> {booking.cancellationReason}
+                                  </div>
+                                </div>
                               </div>
+                            )}
+                            
+                            {booking.bookingReference && (
+                              <div className="mt-2 text-xs text-gray-500">
+                                <strong>Booking Reference:</strong> {booking.bookingReference}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="ml-6 flex flex-col items-end">
+                            <div className="mt-2 flex items-center text-lg font-semibold text-red-600">
+                              <DollarSign className="h-4 w-4 mr-1" />
+                              LKR {booking.totalAmount?.toLocaleString() || '0'}
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500">
+                              Booking cancelled: {new Date(booking.updatedAt).toLocaleDateString()}
                             </div>
                           </div>
                         </div>
@@ -2437,3 +2524,5 @@ const GuideDashboard = () => {
 }
 
 export default GuideDashboard
+
+

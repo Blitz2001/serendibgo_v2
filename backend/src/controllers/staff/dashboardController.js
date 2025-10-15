@@ -78,10 +78,6 @@ const getDashboardOverview = asyncHandler(async (req, res) => {
       newHotels: await User.countDocuments({ 
         role: 'hotel_owner', 
         createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-      }),
-      newVehicles: await User.countDocuments({ 
-        role: 'driver', 
-        createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
       })
     };
 

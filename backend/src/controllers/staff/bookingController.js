@@ -17,6 +17,13 @@ const { staffAuth, requirePermission, logActivity } = require('../../middleware/
 // @access  Private (Staff)
 const getAllBookings = asyncHandler(async (req, res) => {
   try {
+    console.log('🔍 Backend Staff getAllBookings called:', {
+      userId: req.user?._id,
+      userRole: req.user?.role,
+      userEmail: req.user?.email,
+      query: req.query
+    });
+
     const { 
       page = 1, 
       limit = 10, 
@@ -311,6 +318,8 @@ const getAllBookings = asyncHandler(async (req, res) => {
     const hotelCount = await HotelBooking.countDocuments();
     const vehicleCount = await VehicleBooking.countDocuments();
     const total = tourCount + hotelCount + vehicleCount;
+    
+    console.log('📊 Total bookings in database:', total);
     
     // Get booking statistics
     const stats = {

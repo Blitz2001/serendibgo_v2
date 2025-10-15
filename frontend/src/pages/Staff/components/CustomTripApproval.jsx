@@ -187,8 +187,12 @@ const CustomTripApproval = () => {
 
       {/* Custom Trips List */}
       <div className="space-y-4">
-        {filteredTrips.map((trip) => (
-          <div key={trip.id} className="bg-white rounded-xl border border-slate-200 p-6 hover:shadow-lg transition-shadow">
+        {filteredTrips.map((trip, index) => {
+          // Ensure we have a unique key
+          const uniqueKey = trip._id || trip.id || `trip-${index}-${trip.customer?.email || 'unknown'}`;
+          console.log('Trip key:', uniqueKey, 'Trip data:', trip);
+          return (
+          <div key={uniqueKey} className="bg-white rounded-xl border border-slate-200 p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start space-x-4">
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center">
@@ -253,7 +257,7 @@ const CustomTripApproval = () => {
                   View Details
                 </button>
                 {trip.status === 'pending' && (
-                  <>
+                  <React.Fragment key={`actions-${uniqueKey}`}>
                     <button
                       onClick={() => {
                         navigate(`/staff/custom-trips/${trip._id}/approve`, {
@@ -276,12 +280,13 @@ const CustomTripApproval = () => {
                       <XCircle className="h-4 w-4 mr-1" />
                       Reject
                     </button>
-                  </>
+                  </React.Fragment>
                 )}
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {filteredTrips.length === 0 && (
@@ -451,7 +456,7 @@ const CustomTripApproval = () => {
                 Close
               </button>
               {selectedTrip.status === 'pending' && (
-                <>
+                <React.Fragment key={`modal-actions-${selectedTrip.id}`}>
                   <button
                     onClick={() => {
                       setShowDetailsModal(false)
@@ -474,7 +479,7 @@ const CustomTripApproval = () => {
                     <CheckCircle className="h-4 w-4 mr-2" />
                     Approve
                   </button>
-                </>
+                </React.Fragment>
               )}
             </div>
           </div>

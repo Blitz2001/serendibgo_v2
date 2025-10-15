@@ -10,18 +10,37 @@ const paymentService = {
   // Create payment intent (for Stripe)
   createPaymentIntent: async (amount, currency = 'LKR', metadata = {}) => {
     const response = await api.post('/payments/create-intent', {
+      bookingId: metadata.bookingId,
+      amount,
+      currency
+    });
+    return response.data;
+  },
+
+  // Create guest payment intent (for unauthenticated users)
+  createGuestPaymentIntent: async (amount, currency = 'LKR', metadata = {}) => {
+    const response = await api.post('/payments/create-guest-intent', {
+      bookingId: metadata.bookingId,
       amount,
       currency,
-      metadata
+      customerEmail: metadata.customerEmail,
+      customerName: metadata.customerName
     });
     return response.data;
   },
 
   // Confirm payment
-  confirmPayment: async (paymentIntentId, paymentMethodId) => {
+  confirmPayment: async (paymentIntentId) => {
     const response = await api.post('/payments/confirm', {
-      paymentIntentId,
-      paymentMethodId
+      paymentIntentId
+    });
+    return response.data;
+  },
+
+  // Confirm guest payment (no authentication required)
+  confirmGuestPayment: async (paymentIntentId) => {
+    const response = await api.post('/payments/confirm-guest', {
+      paymentIntentId
     });
     return response.data;
   },

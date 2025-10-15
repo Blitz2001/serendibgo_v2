@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Calendar, MapPin, Clock, Users, CreditCard, Sparkles, Eye, CheckCircle, XCircle, User, Building, Car, Phone, Star, MapPin as LocationIcon, Bed, AlertCircle, MessageSquare } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { bookingAPI } from '../services/hotels/hotelService'
@@ -9,6 +9,8 @@ import ReviewForm from '../components/reviews/ReviewForm'
 
 const MyBookings = () => {
   const { user } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [bookings, setBookings] = useState([])
   const [customTrips, setCustomTrips] = useState([])
   const [vehicleBookings, setVehicleBookings] = useState([])
@@ -26,6 +28,16 @@ const MyBookings = () => {
       fetchBookings()
     }
   }, [user])
+
+  // Handle navigation state from payment page
+  useEffect(() => {
+    const locationState = location.state
+    if (locationState?.message) {
+      toast.success(locationState.message)
+      // Clear the state to prevent showing the message again
+      navigate(location.pathname, { replace: true })
+    }
+  }, [location.state, navigate, location.pathname])
 
   const fetchBookings = async () => {
     try {
@@ -70,9 +82,9 @@ const MyBookings = () => {
             const customTrips = customData.data.bookings.filter(booking => booking.type === 'custom')
             setCustomTrips(customTrips)
             
-            // Filter guide bookings (bookings with guide field but no tour/customTrip)
+            // Filter guide bookings (bookings with type 'guide')
             const guideBookings = customData.data.bookings.filter(booking => 
-              booking.guide && !booking.tour && !booking.customTrip
+              booking.type === 'guide'
             )
             setGuideBookings(guideBookings)
             console.log('Guide bookings:', guideBookings)
@@ -148,9 +160,9 @@ const MyBookings = () => {
     }
   }
 
-  const handleConfirmCustomTrip = async (tripId) => {
+  const handleConfirmCustomTrip = async (trip) => {
     try {
-      const response = await fetch(`/api/custom-trips/${tripId}/confirm`, {
+      const response = await fetch(`/api/custom-trips/${trip.id}/confirm`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -161,15 +173,30 @@ const MyBookings = () => {
       const data = await response.json()
       
       if (data.success) {
-        // Refresh bookings to get updated data
-        await fetchBookings()
-        alert('Custom trip confirmed successfully!')
+        // Navigate to payment page
+        navigate('/payment', {
+          state: {
+            bookingId: data.data.booking._id,
+            bookingType: 'custom-trip',
+            amount: trip.totalAmount,
+            currency: 'LKR',
+            tripName: trip.destination,
+            tripDescription: `Custom trip to ${trip.destination}`,
+            startDate: trip.startDate,
+            endDate: trip.endDate,
+            groupSize: trip.groupSize,
+            guideName: trip.assignedGuide?.name || 'TBD',
+            interests: trip.interests?.join(', ') || '',
+            accommodation: trip.accommodation || '',
+            bookingReference: data.data.booking.bookingReference
+          }
+        })
       } else {
-        alert(data.message || 'Failed to confirm custom trip')
+        alert(data.message || 'Failed to create booking for custom trip')
       }
     } catch (error) {
-      console.error('Error confirming custom trip:', error)
-      alert('An error occurred while confirming the custom trip')
+      console.error('Error creating custom trip booking:', error)
+      alert('An error occurred while creating the booking')
     }
   }
 
@@ -267,6 +294,7 @@ const MyBookings = () => {
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8">
               <button
+                key="bookings-tab"
                 onClick={() => setActiveTab('bookings')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'bookings'
@@ -278,6 +306,7 @@ const MyBookings = () => {
                 Regular Tours ({bookings.length})
               </button>
               <button
+                key="custom-tab"
                 onClick={() => setActiveTab('custom')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'custom'
@@ -289,6 +318,7 @@ const MyBookings = () => {
                 Custom Trips ({customTrips.length})
               </button>
               <button
+                key="vehicles-tab"
                 onClick={() => setActiveTab('vehicles')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'vehicles'
@@ -300,6 +330,7 @@ const MyBookings = () => {
                 Vehicle Rentals ({vehicleBookings.length})
               </button>
               <button
+                key="guides-tab"
                 onClick={() => setActiveTab('guides')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'guides'
@@ -494,7 +525,7 @@ const MyBookings = () => {
                           </button>
                           {trip.status === 'approved' && (
                             <button 
-                              onClick={() => handleConfirmCustomTrip(trip.id)}
+                              onClick={() => handleConfirmCustomTrip(trip)}
                               className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                             >
                               <CheckCircle className="h-4 w-4 mr-2" />
@@ -1411,7 +1442,7 @@ const MyBookings = () => {
                   <button
                     onClick={() => {
                       closeDetailsModal()
-                      handleConfirmCustomTrip(selectedTrip.id)
+                      handleConfirmCustomTrip(selectedTrip)
                     }}
                     className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                   >

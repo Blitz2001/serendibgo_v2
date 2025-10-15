@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapPin, Star, Clock, Users, Search, Filter, Calendar, Phone, Mail, Award, Globe, Heart, ChevronDown, X, Shield, CheckCircle, Zap, Crown, Sparkles, Eye, BookOpen, ArrowLeft, User } from 'lucide-react'
 import { guideService } from '../services/guideService'
+import { useAuth } from '../context/AuthContext'
 
 const Guides = () => {
   const navigate = useNavigate()
+  const { user, isAuthenticated } = useAuth()
   const [selectedGuide, setSelectedGuide] = useState(null)
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [guides, setGuides] = useState([])
@@ -144,10 +146,48 @@ const Guides = () => {
 
       console.log('Submitting guide booking:', bookingDataToSubmit)
       
-      const response = await guideService.createGuestGuideBooking(bookingDataToSubmit)
+      // Use authenticated endpoint if user is logged in, otherwise use guest endpoint
+      let response
+      if (isAuthenticated && user) {
+        console.log('User is authenticated, using authenticated booking endpoint')
+        // For authenticated users, we don't need guestInfo in the request body
+        const authenticatedBookingData = {
+          guideId: bookingDataToSubmit.guideId,
+          startDate: bookingDataToSubmit.startDate,
+          endDate: bookingDataToSubmit.endDate,
+          duration: bookingDataToSubmit.duration,
+          groupSize: bookingDataToSubmit.groupSize,
+          specialRequests: bookingDataToSubmit.specialRequests
+        }
+        response = await guideService.createGuideBooking(authenticatedBookingData)
+      } else {
+        console.log('User is not authenticated, using guest booking endpoint')
+        response = await guideService.createGuestGuideBooking(bookingDataToSubmit)
+      }
       
       if (response.success) {
-        alert('Guide booking submitted successfully! We will contact you soon to confirm.')
+        // Calculate total amount (base price per person per day)
+        const basePricePerPersonPerDay = 50; // $50 per person per day
+        const daysDiff = Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24));
+        const totalAmount = basePricePerPersonPerDay * parseInt(bookingData.groupSize) * daysDiff;
+        
+        // Navigate to payment page
+        navigate('/payment', {
+          state: {
+            bookingId: response.data._id,
+            bookingType: 'guide',
+            amount: totalAmount,
+            currency: 'USD',
+            guideName: selectedGuide.firstName + ' ' + selectedGuide.lastName,
+            guideEmail: selectedGuide.email,
+            startDate: startDate.toISOString().split('T')[0],
+            endDate: endDate.toISOString().split('T')[0],
+            groupSize: bookingData.groupSize,
+            duration: bookingData.duration,
+            bookingReference: response.data.bookingReference
+          }
+        });
+        
         setShowBookingModal(false)
         setBookingData({
           date: '',

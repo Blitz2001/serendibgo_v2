@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { StripeProvider } from '../context/StripeContext'
+import PaymentForm from '../components/PaymentForm'
 import { toast } from 'react-hot-toast'
+import paymentService from '../services/payments/paymentService'
 import { 
   CreditCard, 
   CheckCircle, 
@@ -10,45 +13,151 @@ import {
   MapPin,
   Bed,
   DollarSign,
-  ArrowLeft
+  ArrowLeft,
+  User,
+  Phone,
+  Mail,
+  Car
 } from 'lucide-react'
 
 const Payment = () => {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading } = useAuth()
   const [paymentData, setPaymentData] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [clientSecret, setClientSecret] = useState(null)
+  const [initializing, setInitializing] = useState(true)
+  const [paymentIntentCreated, setPaymentIntentCreated] = useState(false)
   
   useEffect(() => {
     // Get booking data from navigation state
-    if (location.state) {
-      setPaymentData(location.state)
-      console.log('Payment page received booking data:', location.state)
-    } else {
+    if (location.state && !paymentIntentCreated) {
+      const initialPaymentData = {
+        ...location.state,
+        isGuestPayment: !isAuthenticated || !user
+      }
+      setPaymentData(initialPaymentData)
+      console.log('Payment page received booking data:', initialPaymentData)
+      createPaymentIntent(initialPaymentData)
+    } else if (!location.state) {
       toast.error('No booking data found')
-      navigate('/hotels')
+      navigate('/guides')
     }
-  }, [location.state, navigate])
+  }, [location.state, navigate, paymentIntentCreated, isAuthenticated, user])
 
-  const handlePayment = async () => {
-    if (!paymentData) return
-    
-    setLoading(true)
+  const createPaymentIntent = async (bookingData) => {
     try {
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      setInitializing(true)
       
-      toast.success('Payment completed successfully!')
-      navigate('/my-bookings')
+      // Debug authentication state
+      console.log('Auth Debug:', {
+        isAuthenticated,
+        user: user ? `${user.firstName} ${user.lastName}` : 'No user',
+        hasToken: !!localStorage.getItem('token')
+      })
+      
+      let response;
+      
+      if (isAuthenticated && user) {
+        try {
+          // Use authenticated payment endpoint
+          console.log('Using authenticated payment endpoint')
+          response = await paymentService.createPaymentIntent(
+            bookingData.amount,
+            bookingData.currency,
+            { bookingId: bookingData.bookingId }
+          )
+        } catch (authError) {
+          console.warn('Authenticated payment failed, falling back to guest payment:', authError.response?.status)
+          
+          // If authenticated payment fails (403, 401), fall back to guest payment
+          if (authError.response?.status === 403 || authError.response?.status === 401) {
+            console.log('Falling back to guest payment endpoint due to auth failure')
+            response = await paymentService.createGuestPaymentIntent(
+              bookingData.amount,
+              bookingData.currency,
+              { 
+                bookingId: bookingData.bookingId,
+                customerEmail: user?.email || bookingData.customerEmail || 'guest@example.com',
+                customerName: user ? `${user.firstName} ${user.lastName}` : bookingData.customerName || 'Guest User'
+              }
+            )
+            // Mark this as a guest payment for the PaymentForm
+            setPaymentData(prev => ({ ...prev, isGuestPayment: true }))
+          } else {
+            throw authError
+          }
+        }
+      } else {
+        // Use guest payment endpoint
+        console.log('Using guest payment endpoint')
+        response = await paymentService.createGuestPaymentIntent(
+          bookingData.amount,
+          bookingData.currency,
+          { 
+            bookingId: bookingData.bookingId,
+            customerEmail: bookingData.customerEmail || 'guest@example.com',
+            customerName: bookingData.customerName || 'Guest User'
+          }
+        )
+      }
+      
+      setClientSecret(response.data.clientSecret)
+      setPaymentIntentCreated(true)
+      console.log('Payment intent created:', response.data.clientSecret)
     } catch (error) {
-      toast.error('Payment failed. Please try again.')
+      console.error('Error creating payment intent:', error)
+      toast.error('Failed to initialize payment. Please try again.')
     } finally {
-      setLoading(false)
+      setInitializing(false)
     }
   }
 
+  const handlePaymentSuccess = (paymentIntent) => {
+    console.log('Payment successful:', paymentIntent)
+    toast.success('Payment completed successfully!')
+    navigate('/my-bookings', { 
+      state: { 
+        message: 'Payment completed successfully!',
+        bookingId: paymentData.bookingId 
+      }
+    })
+  }
+
+  const handlePaymentError = (error) => {
+    console.error('Payment error:', error)
+    toast.error('Payment failed. Please try again.')
+  }
+
+  const handleRetryPayment = async () => {
+    if (paymentData) {
+      setPaymentIntentCreated(false)
+      setClientSecret(null)
+      await createPaymentIntent(paymentData)
+    }
+  }
+
+  const handleAuthFailure = () => {
+    console.log('Authentication failed, clearing token and redirecting to login')
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    toast.error('Your session has expired. Please log in again.')
+    navigate('/login')
+  }
+
   if (!paymentData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Loading payment details...</h2>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading while checking authentication
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -83,121 +192,283 @@ const Payment = () => {
             </h2>
             
             <div className="space-y-4">
-              <div className="flex items-center">
-                <MapPin className="w-5 h-5 text-gray-400 mr-3" />
-                <div>
-                  <p className="font-medium">{paymentData.hotelName}</p>
-                  <p className="text-sm text-gray-600">{paymentData.roomName}</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center">
-                <Calendar className="w-5 h-5 text-gray-400 mr-3" />
-                <div>
-                  <p className="font-medium">Check-in: {paymentData.checkIn}</p>
-                  <p className="text-sm text-gray-600">Check-out: {paymentData.checkOut}</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center">
-                <Users className="w-5 h-5 text-gray-400 mr-3" />
-                <div>
-                  <p className="font-medium">Guests: {paymentData.guests || 1}</p>
-                </div>
-              </div>
-              
-                  <div className="border-t pt-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Room Price:</span>
-                        <span>{paymentData.currency} {paymentData.amount}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Taxes & Fees:</span>
-                        <span>{paymentData.currency} {Math.round(paymentData.amount * 0.15)}</span>
-                      </div>
-                      <div className="flex justify-between text-lg font-semibold border-t pt-2">
-                        <span>Total Amount:</span>
-                        <span className="text-2xl font-bold text-blue-600">
-                          {paymentData.currency} {Math.round(paymentData.amount * 1.15)}
-                        </span>
+              {/* Booking Type Specific Information */}
+              {paymentData.bookingType === 'hotel' && (
+                <>
+                  <div className="flex items-center">
+                    <MapPin className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">{paymentData.hotelName}</p>
+                      <p className="text-sm text-gray-600">{paymentData.roomName}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <Calendar className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">Check-in: {paymentData.checkIn}</p>
+                      <p className="text-sm text-gray-600">Check-out: {paymentData.checkOut}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <Users className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">Guests: {paymentData.guests || 1}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {paymentData.bookingType === 'guide' && (
+                <>
+                  <div className="flex items-center">
+                    <User className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">Guide: {paymentData.guideName}</p>
+                      <p className="text-sm text-gray-600">{paymentData.guideEmail}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <Calendar className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">Start: {paymentData.startDate}</p>
+                      <p className="text-sm text-gray-600">End: {paymentData.endDate}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <Users className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">Group Size: {paymentData.groupSize}</p>
+                      <p className="text-sm text-gray-600">Duration: {paymentData.duration}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {paymentData.bookingType === 'tour' && (
+                <>
+                  <div className="flex items-center">
+                    <MapPin className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">{paymentData.tourName}</p>
+                      <p className="text-sm text-gray-600">{paymentData.tourDescription}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <Calendar className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">Start: {paymentData.startDate}</p>
+                      <p className="text-sm text-gray-600">End: {paymentData.endDate}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <Users className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">Group Size: {paymentData.groupSize}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {paymentData.bookingType === 'vehicle' && (
+                <>
+                  <div className="flex items-center">
+                    <Car className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">{paymentData.vehicleName}</p>
+                      <p className="text-sm text-gray-600">{paymentData.vehicleType}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <MapPin className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">Pickup: {paymentData.pickupLocation}</p>
+                      <p className="text-sm text-gray-600">Dropoff: {paymentData.dropoffLocation}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <Calendar className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">Pickup: {new Date(paymentData.pickupDateTime).toLocaleString()}</p>
+                      <p className="text-sm text-gray-600">Dropoff: {new Date(paymentData.dropoffDateTime).toLocaleString()}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <Users className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">Passengers: {paymentData.passengers}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {paymentData.bookingType === 'custom-trip' && (
+                <>
+                  <div className="flex items-center">
+                    <MapPin className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">{paymentData.tripName}</p>
+                      <p className="text-sm text-gray-600">{paymentData.tripDescription}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <Calendar className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">Start: {paymentData.startDate}</p>
+                      <p className="text-sm text-gray-600">End: {paymentData.endDate}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <Users className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="font-medium">Group Size: {paymentData.groupSize}</p>
+                      <p className="text-sm text-gray-600">Guide: {paymentData.guideName}</p>
+                    </div>
+                  </div>
+                  
+                  {paymentData.interests && (
+                    <div className="flex items-center">
+                      <User className="w-5 h-5 text-gray-400 mr-3" />
+                      <div>
+                        <p className="font-medium">Interests: {paymentData.interests}</p>
+                        <p className="text-sm text-gray-600">Accommodation: {paymentData.accommodation}</p>
                       </div>
                     </div>
-                    {paymentData.bookingReference && (
-                      <div className="mt-3 p-2 bg-gray-50 rounded text-sm">
-                        <span className="font-medium">Booking Reference:</span> {paymentData.bookingReference}
-                      </div>
-                    )}
+                  )}
+                </>
+              )}
+
+              {/* Customer Information */}
+              <div className="border-t pt-4">
+                <h3 className="font-medium text-gray-900 mb-2">Customer Information</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <User className="w-4 h-4 text-gray-400 mr-2" />
+                    <span className="text-sm">
+                      {isAuthenticated && user 
+                        ? `${user.firstName} ${user.lastName}` 
+                        : paymentData.customerName || 'Guest User'
+                      }
+                    </span>
                   </div>
+                  <div className="flex items-center">
+                    <Mail className="w-4 h-4 text-gray-400 mr-2" />
+                    <span className="text-sm">
+                      {isAuthenticated && user 
+                        ? user.email 
+                        : paymentData.customerEmail || 'guest@example.com'
+                      }
+                    </span>
+                  </div>
+                  {(isAuthenticated && user?.phone) || paymentData.customerPhone ? (
+                    <div className="flex items-center">
+                      <Phone className="w-4 h-4 text-gray-400 mr-2" />
+                      <span className="text-sm">
+                        {isAuthenticated && user 
+                          ? user.phone 
+                          : paymentData.customerPhone
+                        }
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              
+              {/* Pricing Breakdown */}
+              <div className="border-t pt-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>
+                      {paymentData.bookingType === 'hotel' ? 'Room Price:' : 
+                       paymentData.bookingType === 'tour' ? 'Tour Price:' : 
+                       paymentData.bookingType === 'vehicle' ? 'Vehicle Rental:' :
+                       paymentData.bookingType === 'custom-trip' ? 'Custom Trip Price:' :
+                       'Service Price:'}
+                    </span>
+                    <span>{paymentData.currency} {paymentData.amount}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Taxes & Fees:</span>
+                    <span>{paymentData.currency} {Math.round(paymentData.amount * 0.15)}</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-semibold border-t pt-2">
+                    <span>Total Amount:</span>
+                    <span className="text-2xl font-bold text-blue-600">
+                      {paymentData.currency} {Math.round(paymentData.amount * 1.15)}
+                    </span>
+                  </div>
+                </div>
+                {paymentData.bookingReference && (
+                  <div className="mt-3 p-2 bg-gray-50 rounded text-sm">
+                    <span className="font-medium">Booking Reference:</span> {paymentData.bookingReference}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Payment Form */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-semibold mb-4 flex items-center">
-              <CreditCard className="w-6 h-6 text-blue-600 mr-2" />
-              Payment Details
-            </h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Card Number
-                </label>
-                <input
-                  type="text"
-                  placeholder="1234 5678 9012 3456"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Expiry Date
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="MM/YY"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+              {/* Payment Form */}
+              {initializing ? (
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-3 text-gray-600">Initializing payment...</span>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    CVV
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="123"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              ) : clientSecret ? (
+                <StripeProvider clientSecret={clientSecret}>
+                  <PaymentForm
+                    bookingData={{
+                      bookingId: paymentData.bookingId,
+                      amount: Math.round(paymentData.amount * 1.15), // Include taxes
+                    currency: paymentData.currency,
+                    customerName: isAuthenticated && user 
+                      ? `${user.firstName} ${user.lastName}` 
+                      : paymentData.customerName || 'Guest User',
+                    customerEmail: isAuthenticated && user 
+                      ? user.email 
+                      : paymentData.customerEmail || 'guest@example.com',
+                    clientSecret: clientSecret,
+                    isGuestPayment: paymentData.isGuestPayment || !isAuthenticated || !user
+                    }}
+                    onPaymentSuccess={handlePaymentSuccess}
+                    onPaymentError={handlePaymentError}
+                    onRetry={handleRetryPayment}
                   />
+                </StripeProvider>
+              ) : (
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="text-center text-red-600">
+                    <p>Failed to initialize payment. Please try again.</p>
+                    <div className="mt-4 space-x-2">
+                      <button 
+                        onClick={handleRetryPayment} 
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        Retry Payment
+                      </button>
+                      {isAuthenticated && (
+                        <button 
+                          onClick={handleAuthFailure} 
+                          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                        >
+                          Clear Session & Login
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cardholder Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="John Doe"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-                  <button
-                    onClick={handlePayment}
-                    disabled={loading}
-                    className={`w-full py-3 px-4 rounded-lg font-semibold transition-colors ${
-                      loading
-                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    {loading ? 'Processing Payment...' : `Pay ${paymentData.currency} ${Math.round(paymentData.amount * 1.15)}`}
-                  </button>
-            </div>
-          </div>
+              )}
         </div>
       </div>
     </div>

@@ -66,6 +66,7 @@ export const guideService = {
 
   // Get guide bookings (for guides to see their bookings)
   getGuideBookings: async (params = {}) => {
+    console.log('🔍 guideService.getGuideBookings called with params:', params)
     const queryParams = new URLSearchParams();
     
     Object.keys(params).forEach(key => {
@@ -74,8 +75,18 @@ export const guideService = {
       }
     });
     
-    const response = await api.get(`/bookings/guide?${queryParams.toString()}`);
-    return response.data;
+    const url = `/bookings/guide?${queryParams.toString()}`
+    console.log('🌐 guideService - Making API call to:', url)
+    
+    try {
+      const response = await api.get(url);
+      console.log('📡 guideService - API response:', response.data)
+      return response.data;
+    } catch (error) {
+      console.error('❌ guideService - API error:', error)
+      console.error('❌ guideService - Error response:', error.response?.data)
+      throw error;
+    }
   },
 
   // Get user's guide bookings (for tourists to see their guide bookings)

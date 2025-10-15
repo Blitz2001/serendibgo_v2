@@ -30,6 +30,7 @@ import GuideEarnings from './pages/Guide/GuideEarnings'
 import GuideAnalytics from './pages/Guide/GuideAnalytics'
 import Hotels from './pages/Hotels'
 import Payment from './pages/Payment'
+import PaymentSuccess from './pages/PaymentSuccess'
 import Vehicles from './pages/Vehicles'
 import MyBookings from './pages/MyBookings'
 import Login from './pages/Login'
@@ -46,6 +47,7 @@ import Contact from './pages/Contact'
 import AdminDashboard from './pages/admin/dashboard/AdminDashboard'
 import AdminTours from './pages/admin/AdminTours'
 import AdminBookings from './pages/admin/AdminBookings'
+import AdminRefundManagement from './pages/admin/AdminRefundManagement'
 
 // Staff Pages
 import StaffDashboard from './pages/Staff/StaffDashboard'
@@ -279,9 +281,21 @@ function App() {
                   </ProtectedRoute>
                 } />
                 
-                <Route path="payment/:bookingId" element={
+                 <Route path="payment" element={
+                   <ProtectedRoute>
+                     <Payment />
+                   </ProtectedRoute>
+                 } />
+                 
+                 <Route path="payment/:bookingId" element={
+                   <ProtectedRoute>
+                     <Payment />
+                   </ProtectedRoute>
+                 } />
+                
+                <Route path="payment-success" element={
                   <ProtectedRoute>
-                    <Payment />
+                    <PaymentSuccess />
                   </ProtectedRoute>
                 } />
                 
@@ -305,6 +319,12 @@ function App() {
                 <Route path="admin/bookings" element={
                   <ProtectedRoute allowedRoles={['admin', 'staff']}>
                     <AdminBookings />
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="admin/refunds" element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <AdminRefundManagement />
                   </ProtectedRoute>
                 } />
                 
