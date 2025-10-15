@@ -1,11 +1,14 @@
 // Staff Service - API calls for staff operations
 class StaffService {
   constructor() {
-    this.baseURL = '/api/staff';
+    this.baseURL = `${import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api'}/staff`;
   }
 
   getHeaders() {
     const token = localStorage.getItem('token');
+    console.log('🔑 staffService.getHeaders - Token:', token ? 'Present' : 'Missing');
+    console.log('🔑 staffService.getHeaders - Token length:', token ? token.length : 0);
+    console.log('🔑 staffService.getHeaders - Token preview:', token ? token.substring(0, 20) + '...' : 'None');
     return {
       'Content-Type': 'application/json',
       'Authorization': token ? `Bearer ${token}` : ''
@@ -16,6 +19,17 @@ class StaffService {
     const data = await response.json();
     
     if (!response.ok) {
+      console.error('❌ API Error Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: data
+      });
+      
+      // Handle validation errors with specific details
+      if (data.errors && Array.isArray(data.errors)) {
+        throw new Error(`Validation error: ${data.errors.join(', ')}`);
+      }
+      
       throw new Error(data.message || 'Request failed');
     }
     
@@ -457,11 +471,23 @@ class StaffService {
   }
 
   async createTrip(tripData) {
+    console.log('🚀 staffService.createTrip called with data:', tripData);
+    const headers = this.getHeaders();
+    console.log('🚀 staffService.createTrip headers:', headers);
+    
     const response = await fetch(`${this.baseURL}/trips`, {
       method: 'POST',
-      headers: this.getHeaders(),
+      headers: headers,
       body: JSON.stringify(tripData),
     });
+    
+    console.log('🚀 staffService.createTrip response status:', response.status);
+    console.log('🚀 staffService.createTrip response ok:', response.ok);
+    
+    // Log response body for debugging
+    const responseClone = response.clone();
+    const responseData = await responseClone.json();
+    console.log('🚀 staffService.createTrip response data:', responseData);
     
     return this.handleResponse(response);
   }
