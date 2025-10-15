@@ -240,8 +240,26 @@ const VehicleBookingFlow = () => {
       
       const data = await response.json();
       if (data.status === 'success') {
-        toast.success('Booking request submitted successfully!');
-        navigate('/customer/booking-requests');
+        const booking = data.data;
+        const totalAmount = bookingData.pricing?.totalPrice || 0;
+        
+        // Navigate to payment page
+        navigate('/payment', {
+          state: {
+            bookingId: booking._id,
+            bookingType: 'vehicle',
+            amount: totalAmount,
+            currency: 'USD',
+            vehicleName: vehicle?.make + ' ' + vehicle?.model,
+            vehicleType: vehicle?.type,
+            pickupLocation: bookingData.pickupLocation.address,
+            dropoffLocation: bookingData.dropoffLocation.address,
+            pickupDateTime: bookingData.pickupDateTime,
+            dropoffDateTime: bookingData.dropoffDateTime,
+            passengers: bookingData.passengers.totalPassengers,
+            bookingReference: booking.bookingReference
+          }
+        });
       } else {
         toast.error(data.message || 'Failed to submit booking request');
       }

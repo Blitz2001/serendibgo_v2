@@ -82,27 +82,29 @@ const getUserBookings = async (req, res) => {
     // Transform data to unified format
     const allBookings = [];
 
-    // Add regular tour bookings
+    // Add regular tour bookings (exclude guide bookings)
     regularBookings.forEach(booking => {
-      allBookings.push({
-        id: booking._id,
-        type: 'tour',
-        title: booking.tour?.title || 'Tour Booking',
-        description: booking.tour?.description || '',
-        images: booking.tour?.images || [],
-        startDate: booking.startDate,
-        endDate: booking.endDate,
-        duration: booking.duration,
-        groupSize: booking.groupSize,
-        totalAmount: booking.totalAmount,
-        status: booking.status,
-        paymentStatus: booking.paymentStatus,
-        guide: booking.guide,
-        location: booking.tour?.location?.name || 'Sri Lanka',
-        specialRequests: booking.specialRequests,
-        createdAt: booking.createdAt,
-        bookingDate: booking.bookingDate
-      });
+      if (booking.tour || (!booking.guide)) {
+        allBookings.push({
+          id: booking._id,
+          type: 'tour',
+          title: booking.tour?.title || 'Tour Booking',
+          description: booking.tour?.description || '',
+          images: booking.tour?.images || [],
+          startDate: booking.startDate,
+          endDate: booking.endDate,
+          duration: booking.duration,
+          groupSize: booking.groupSize,
+          totalAmount: booking.totalAmount,
+          status: booking.status,
+          paymentStatus: booking.paymentStatus,
+          guide: booking.guide,
+          location: booking.tour?.location?.name || 'Sri Lanka',
+          specialRequests: booking.specialRequests,
+          createdAt: booking.createdAt,
+          bookingDate: booking.bookingDate
+        });
+      }
     });
 
     // Add custom trip bookings
@@ -137,6 +139,32 @@ const getUserBookings = async (req, res) => {
           activities: trip.requestDetails.activities
         }
       });
+    });
+
+    // Add guide bookings (direct guide bookings without tour)
+    regularBookings.forEach(booking => {
+      if (booking.guide && !booking.tour && !booking.customTrip) {
+        allBookings.push({
+          id: booking._id,
+          type: 'guide',
+          title: `Guide Service with ${booking.guide?.firstName} ${booking.guide?.lastName}`,
+          description: 'Personal Guide Service',
+          images: [],
+          startDate: booking.startDate,
+          endDate: booking.endDate,
+          duration: booking.duration,
+          groupSize: booking.groupSize,
+          totalAmount: booking.totalAmount,
+          status: booking.status,
+          paymentStatus: booking.paymentStatus,
+          guide: booking.guide,
+          location: 'Sri Lanka',
+          specialRequests: booking.specialRequests,
+          createdAt: booking.createdAt,
+          bookingDate: booking.bookingDate,
+          bookingReference: booking.bookingReference
+        });
+      }
     });
 
     // Sort all bookings by creation date
@@ -571,6 +599,13 @@ const updateBookingStatus = async (req, res) => {
 // @access  Private (Guide)
 const getGuideBookings = async (req, res) => {
   try {
+    console.log('🔍 Backend getGuideBookings called:', {
+      userId: req.user?._id,
+      userRole: req.user?.role,
+      userEmail: req.user?.email,
+      query: req.query
+    });
+
     const { status, page = 1, limit = 10 } = req.query;
 
     // Build query
@@ -578,6 +613,8 @@ const getGuideBookings = async (req, res) => {
     if (status) {
       query.status = status;
     }
+
+    console.log('📊 Backend - Query built:', query);
 
     // Get bookings
     const bookings = await Booking.find(query)
@@ -587,8 +624,12 @@ const getGuideBookings = async (req, res) => {
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
+    console.log('📋 Backend - Bookings found:', bookings.length);
+
     // Get total count
     const total = await Booking.countDocuments(query);
+
+    console.log('📊 Backend - Total bookings:', total);
 
     res.json({
       success: true,
@@ -604,7 +645,7 @@ const getGuideBookings = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching guide bookings:', error);
+    console.error('❌ Backend - Error fetching guide bookings:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching guide bookings',
@@ -630,13 +671,18 @@ const createGuideBooking = async (req, res) => {
       });
     }
 
-    // Check if guide exists
-    const guide = await User.findById(guideId);
-    if (!guide || guide.role !== 'guide') {
-      return res.status(404).json({
-        success: false,
-        message: 'Guide not found'
-      });
+    // Check if guide exists (skip validation if MongoDB not connected)
+    try {
+      const guide = await User.findById(guideId);
+      if (!guide || guide.role !== 'guide') {
+        return res.status(404).json({
+          success: false,
+          message: 'Guide not found'
+        });
+      }
+    } catch (dbError) {
+      console.warn('⚠️ MongoDB not connected, skipping guide validation:', dbError.message);
+      // Continue without validation - this is a temporary workaround
     }
 
     // Calculate total amount (you can adjust pricing logic)
@@ -667,7 +713,15 @@ const createGuideBooking = async (req, res) => {
       bookingReference
     });
 
-    await booking.save();
+    try {
+      await booking.save();
+    } catch (dbError) {
+      console.error('❌ Failed to save booking due to MongoDB connection:', dbError.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection error. Please try again later.'
+      });
+    }
 
     console.log('✅ Guide booking saved:', booking._id);
 
@@ -813,7 +867,14 @@ const createGuestGuideBooking = async (req, res) => {
 
     await booking.save();
 
-    console.log('✅ Guest guide booking saved:', booking._id);
+    console.log('✅ Guest guide booking saved:', {
+      bookingId: booking._id,
+      userId: booking.user,
+      guideId: booking.guide,
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      bookingReference: booking.bookingReference
+    });
 
     // Populate the booking with guide and user details
     await booking.populate('guide', 'firstName lastName email phone avatar rating');

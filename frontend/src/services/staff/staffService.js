@@ -145,12 +145,27 @@ class StaffService {
 
   // Bookings
   async getBookings(params = {}) {
+    console.log('🔍 staffService.getBookings called with params:', params);
     const queryParams = new URLSearchParams(params);
-    const response = await fetch(`${this.baseURL}/bookings?${queryParams}`, {
-      headers: this.getHeaders(),
-    });
+    const url = `${this.baseURL}/bookings?${queryParams}`;
     
-    return this.handleResponse(response);
+    console.log('🌐 staffService - Making API call to:', url);
+    console.log('🔑 staffService - Headers:', this.getHeaders());
+    
+    try {
+      const response = await fetch(url, {
+        headers: this.getHeaders(),
+      });
+      
+      console.log('📡 staffService - Response status:', response.status);
+      const data = await this.handleResponse(response);
+      console.log('📊 staffService - Response data:', data);
+      
+      return data;
+    } catch (error) {
+      console.error('❌ staffService - API error:', error);
+      throw error;
+    }
   }
 
   async getBookingDetails(bookingId) {

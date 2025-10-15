@@ -69,6 +69,15 @@ const BookingManagement = () => {
   const fetchBookings = useCallback(async () => {
     if (!isAuthenticated) return;
     
+    console.log('🔍 Staff BookingManagement - Fetching bookings...', {
+      isAuthenticated,
+      user: user?.id || user?._id,
+      userRole: user?.role,
+      filters,
+      searchTerm,
+      pagination: pagination.current
+    });
+    
     setLoading(true);
     try {
       const params = {
@@ -82,8 +91,10 @@ const BookingManagement = () => {
       console.log('📊 Received bookings:', data.data.bookings.length);
       setBookings(data.data.bookings);
       setPagination(data.data.pagination);
+      
+      console.log('✅ Staff BookingManagement - Bookings fetched:', data.data.bookings?.length || 0, 'bookings');
     } catch (error) {
-      console.error('Fetch bookings error:', error);
+      console.error('❌ Staff BookingManagement - Fetch bookings error:', error);
       toast.error(error.message || 'Failed to fetch bookings');
     } finally {
       setLoading(false);

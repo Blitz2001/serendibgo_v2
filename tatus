@@ -1,0 +1,23 @@
+[33mffcaeb8[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Resolve merge conflicts: fix MongoDB connection logic and remove deleted BookingModal component
+[33mf91820e[m Update booking and payment functionality with comprehensive testing documentation
+[33m425a30f[m docs: Add comprehensive booking verification report
+[33md7fa42b[m Resolve merge conflicts - integrate Stripe payment system
+[33m72ee0ef[m docs: Add Stripe documentation with actual keys for development
+[33m0e1798a[m feat: Complete Stripe payment integration with custom trips
+[33me3870ee[m Merge branch 'main' of https://github.com/Blitz2001/serendibgo_v2
+[33m1e7d796[m tour booking updated
+[33ma807d72[m review v2
+[33m7842d59[m Enhance vehicle image upload handling in vehicleController
+[33m9af1659[m Enhance Chatbot functionality and UI improvements
+[33m5e8c534[m Update frontend dependencies and enhance dashboard functionality
+[33ma72e7e0[m Merge branch 'main' of https://github.com/Blitz2001/serendibgo_v2
+[33m8faff20[m Refactor vehicle management and enhance admin dashboard functionality
+[33mcf6e169[m Merge upstream changes with support management fixes
+[33mea3a3c0[m Fix staff support management to use real API data
+[33m4548428[m Merge branch 'main' of https://github.com/Blitz2001/serendibgo_v2
+[33mfcdf6a2[m Refactor vehicle management and approval process
+[33m0b8f128[m Add debugging and validation to support ticket submission
+[33mcaf2489[m Fix support ticket message schema mismatch
+[33me5ec16d[m Implement comprehensive support ticket system
+[33m234368d[m Enhance vehicle management and user experience
+[33mf999c33[m Merge branch 'main' of https://github.com/Blitz2001/serendibgo_v2

@@ -616,7 +616,7 @@ const rejectCustomTrip = async (req, res) => {
   }
 };
 
-// @desc    Confirm custom trip (customer payment)
+// @desc    Create booking for custom trip (prepare for payment)
 // @route   POST /api/custom-trips/:id/confirm
 // @access  Private
 const confirmCustomTrip = async (req, res) => {
@@ -652,7 +652,7 @@ const confirmCustomTrip = async (req, res) => {
       });
     }
 
-    // Create booking record
+    // Create booking record with pending payment status
     const booking = new Booking({
       user: customTrip.customer,
       tour: null, // Custom trip doesn't have a predefined tour
@@ -664,56 +664,33 @@ const confirmCustomTrip = async (req, res) => {
       duration: 'multi-day',
       groupSize: customTrip.requestDetails.groupSize,
       totalAmount: customTrip.staffAssignment.totalBudget.totalAmount,
-      status: 'confirmed',
-      paymentStatus: 'paid',
+      status: 'pending', // Will be confirmed after payment
+      paymentStatus: 'pending', // Will be updated after payment
       specialRequests: customTrip.requestDetails.specialRequests,
+      bookingReference: `CT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
       isActive: true
     });
 
     await booking.save();
 
-    // Update custom trip
-    customTrip.status = 'confirmed';
+    // Update custom trip with booking reference
     customTrip.booking = booking._id;
-    customTrip.paymentStatus = 'paid';
-
     await customTrip.save();
-
-    // Send confirmation email
-    await sendEmail({
-      to: customTrip.requestDetails.contactInfo.email,
-      subject: 'Custom Trip Confirmed - Payment Received',
-      html: `
-        <h2>Payment Confirmed - Your Custom Trip is Booked!</h2>
-        <p>Dear ${customTrip.requestDetails.contactInfo.name},</p>
-        <p>Thank you for your payment! Your custom trip has been confirmed.</p>
-        <p><strong>Booking Reference:</strong> ${booking._id}</p>
-        <p><strong>Trip Details:</strong></p>
-        <ul>
-          <li>Destination: ${customTrip.requestDetails.destination}</li>
-          <li>Dates: ${customTrip.requestDetails.startDate.toDateString()} to ${customTrip.requestDetails.endDate.toDateString()}</li>
-          <li>Group Size: ${customTrip.requestDetails.groupSize}</li>
-          <li>Total Paid: LKR ${customTrip.staffAssignment.totalBudget.totalAmount}</li>
-        </ul>
-        <p>Your guide will contact you soon with detailed itinerary and pickup information.</p>
-        <p>Best regards,<br>Serendib GO Team</p>
-      `
-    });
 
     res.json({
       success: true,
-      message: 'Custom trip confirmed successfully',
+      message: 'Booking created successfully. Please proceed to payment.',
       data: {
-        customTrip,
-        booking
+        booking: booking,
+        customTrip: customTrip
       }
     });
 
   } catch (error) {
-    console.error('Error confirming custom trip:', error);
+    console.error('Error creating custom trip booking:', error);
     res.status(500).json({
       success: false,
-      message: 'Error confirming custom trip',
+      message: 'Error creating booking for custom trip',
       error: error.message
     });
   }
