@@ -18,6 +18,7 @@ import {
   User,
   Eye,
   ChevronDown,
+  Building,
   LogOut,
   ExternalLink,
   Home,
@@ -784,10 +785,18 @@ const AdminDashboard = () => {
     try {
       console.log('fetchAnalyticsData called');
       
-      // Fetch real analytics data from backend
-      const response = await api.get('/admin/analytics', {
-        params: { period: analyticsPeriod === '7days' ? '7d' : '30d' }
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Analytics request timeout')), 15000); // 15 second timeout
       });
+
+      // Fetch real analytics data from backend with timeout
+      const analyticsPromise = api.get('/admin/analytics', {
+        params: { period: analyticsPeriod === '7days' ? '7d' : '30d' },
+        timeout: 15000 // 15 second timeout
+      });
+
+      const response = await Promise.race([analyticsPromise, timeoutPromise]);
 
       if (response.data.success) {
         const { 
@@ -856,6 +865,11 @@ const AdminDashboard = () => {
       }
     } catch (error) {
       console.error('Error fetching analytics data:', error);
+      
+      // Handle timeout specifically
+      if (error.message === 'Analytics request timeout' || error.code === 'ECONNABORTED') {
+        console.warn('Analytics request timed out, using fallback data');
+      }
       
       // Fallback to mock data if API fails
       const mockUserAnalytics = [
