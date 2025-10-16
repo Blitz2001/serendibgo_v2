@@ -639,6 +639,33 @@ class StaffService {
     return this.handleResponse(response);
   }
 
+  async getReviewStatistics() {
+    const response = await fetch(`${this.baseURL}/support/reviews/statistics`, {
+      headers: this.getHeaders(),
+    });
+    
+    return this.handleResponse(response);
+  }
+
+  async deleteReview(reviewId) {
+    const response = await fetch(`${this.baseURL}/support/reviews/${reviewId}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    });
+    
+    return this.handleResponse(response);
+  }
+
+  async bulkReviewAction(reviewIds, action) {
+    const response = await fetch(`${this.baseURL}/support/reviews/bulk-action`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ reviewIds, action }),
+    });
+    
+    return this.handleResponse(response);
+  }
+
   async moderateReview(reviewId, status, reason) {
     const response = await fetch(`${this.baseURL}/support/reviews/${reviewId}/moderate`, {
       method: 'PUT',

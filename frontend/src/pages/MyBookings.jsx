@@ -442,8 +442,8 @@ const MyBookings = () => {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {bookings.map((booking) => (
-                      <div key={booking._id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    {bookings.map((booking, index) => (
+                      <div key={booking._id || `hotel-booking-${index}`} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center space-x-2 mb-2">
@@ -552,8 +552,8 @@ const MyBookings = () => {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {tourBookings.map((booking) => (
-                      <div key={booking.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    {tourBookings.map((booking, index) => (
+                      <div key={booking.id || `tour-booking-${index}`} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center space-x-2 mb-2">
@@ -685,8 +685,8 @@ const MyBookings = () => {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {customTrips.map((trip) => (
-                      <div key={trip.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    {customTrips.map((trip, index) => (
+                      <div key={trip.id || `custom-trip-${index}`} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center">
@@ -814,8 +814,8 @@ const MyBookings = () => {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {vehicleBookings.map((booking) => (
-                      <div key={booking._id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    {vehicleBookings.map((booking, index) => (
+                      <div key={booking._id || `vehicle-booking-${index}`} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center space-x-2 mb-2">
@@ -915,8 +915,8 @@ const MyBookings = () => {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {guideBookings.map((booking) => (
-                      <div key={booking._id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    {guideBookings.map((booking, index) => (
+                      <div key={booking._id || `guide-booking-${index}`} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center space-x-2 mb-2">

@@ -314,6 +314,50 @@ const getPlatformAnalytics = asyncHandler(async (req, res) => {
       }
     ]);
 
+    // Calculate additional metrics
+    const totalUsers = await User.countDocuments();
+    const totalBookings = await HotelBooking.countDocuments();
+    const totalRevenue = await HotelBooking.aggregate([
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    ]).then(result => result[0]?.total || 0);
+
+    // Calculate growth rates
+    const previousStartDate = new Date(startDate);
+    previousStartDate.setDate(previousStartDate.getDate() - (period === '7d' ? 7 : 30));
+
+    const previousUsers = await User.countDocuments({
+      createdAt: { $gte: previousStartDate, $lt: startDate }
+    });
+
+    const previousBookings = await HotelBooking.countDocuments({
+      createdAt: { $gte: previousStartDate, $lt: startDate }
+    });
+
+    const previousRevenue = await HotelBooking.aggregate([
+      { 
+        $match: { 
+          createdAt: { $gte: previousStartDate, $lt: startDate } 
+        } 
+      },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    ]).then(result => result[0]?.total || 0);
+
+    const currentUsers = userTrends.reduce((sum, trend) => sum + trend.count, 0);
+    const currentBookings = bookingTrends.reduce((sum, trend) => sum + trend.count, 0);
+    const currentRevenue = bookingTrends.reduce((sum, trend) => sum + (trend.revenue || 0), 0);
+
+    const userGrowthRate = previousUsers > 0 ? Math.round(((currentUsers - previousUsers) / previousUsers) * 100 * 10) / 10 : 0;
+    const bookingGrowthRate = previousBookings > 0 ? Math.round(((currentBookings - previousBookings) / previousBookings) * 100 * 10) / 10 : 0;
+    const revenueGrowthRate = previousRevenue > 0 ? Math.round(((currentRevenue - previousRevenue) / previousRevenue) * 100 * 10) / 10 : 0;
+
+    // Calculate average booking value
+    const avgBookingValue = currentBookings > 0 ? Math.round(currentRevenue / currentBookings) : 0;
+
+    // Get active users (users who logged in within the period)
+    const activeUsers = await User.countDocuments({
+      lastLogin: { $gte: startDate }
+    });
+
     res.status(200).json({
       success: true,
       data: {
@@ -321,7 +365,26 @@ const getPlatformAnalytics = asyncHandler(async (req, res) => {
         userTrends,
         bookingTrends,
         hotelTrends,
-        topHotels
+        topHotels,
+        // Summary metrics
+        totalNewUsers: currentUsers,
+        avgActiveUsers: activeUsers,
+        totalBookings: currentBookings,
+        totalRevenue: currentRevenue,
+        userGrowthRate,
+        bookingGrowthRate,
+        revenueGrowthRate,
+        avgBookingValue,
+        // Overall platform metrics
+        platformStats: {
+          totalUsers,
+          totalBookings,
+          totalRevenue,
+          totalHotels: await Hotel.countDocuments(),
+          totalStaff: await User.countDocuments({ role: 'staff' }),
+          totalGuides: await User.countDocuments({ role: 'guide' }),
+          totalTourists: await User.countDocuments({ role: 'tourist' })
+        }
       }
     });
   } catch (error) {

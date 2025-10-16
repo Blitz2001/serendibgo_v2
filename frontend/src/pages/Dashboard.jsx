@@ -74,8 +74,8 @@ const Dashboard = () => {
 
       // Process bookings data
       const bookings = bookingsResponse.data.success ? bookingsResponse.data.data.bookings : []
-      const recentBookings = bookings.slice(0, 3).map(booking => ({
-        id: booking._id,
+      const recentBookings = bookings.slice(0, 3).map((booking, index) => ({
+        id: booking._id || `booking-${index}`,
         type: booking.type || 'tour',
         title: booking.tour?.title || booking.hotel?.name || booking.vehicle?.name || 'Booking',
         date: booking.startDate || booking.checkInDate || booking.createdAt,
@@ -94,8 +94,8 @@ const Dashboard = () => {
           return tripDate > new Date() && (booking.status === 'confirmed' || booking.status === 'pending')
         })
         .slice(0, 2)
-        .map(booking => ({
-          id: booking._id,
+        .map((booking, index) => ({
+          id: booking._id || `upcoming-${index}`,
           title: booking.tour?.title || booking.hotel?.name || booking.vehicle?.name || 'Trip',
           date: booking.startDate || booking.checkInDate,
           type: booking.type || 'tour',
@@ -117,7 +117,7 @@ const Dashboard = () => {
       if (toursResponse.data.success && toursResponse.data.data && toursResponse.data.data.tours) {
         toursResponse.data.data.tours.forEach(tour => {
           recommendations.push({
-            id: tour._id,
+            id: `tour-${tour._id}`,
             title: tour.title,
             location: tour.location?.city || tour.destination,
             rating: tour.rating?.average || 4.5,
@@ -132,7 +132,7 @@ const Dashboard = () => {
       if (hotelsResponse.data.success && hotelsResponse.data.data && hotelsResponse.data.data.hotels) {
         hotelsResponse.data.data.hotels.forEach(hotel => {
           recommendations.push({
-            id: hotel._id,
+            id: `hotel-${hotel._id}`,
             title: hotel.name,
             location: hotel.location?.city || 'Sri Lanka',
             rating: hotel.rating?.average || 4.5,
@@ -147,7 +147,7 @@ const Dashboard = () => {
       if (vehiclesResponse.data.success && vehiclesResponse.data.data && vehiclesResponse.data.data.vehicles) {
         vehiclesResponse.data.data.vehicles.forEach(vehicle => {
           recommendations.push({
-            id: vehicle._id,
+            id: `vehicle-${vehicle._id}`,
             title: vehicle.name || `${vehicle.make} ${vehicle.model}`,
             location: vehicle.location?.city || 'Sri Lanka',
             rating: vehicle.ratings?.overall || 4.5,
@@ -315,7 +315,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-0 pb-8">
         {/* Welcome Section */}
         <div className="mb-8">
           <div className="flex justify-between items-start">
@@ -406,8 +406,9 @@ const Dashboard = () => {
               </div>
               <div className="p-6">
                 <div className="space-y-4">
-                  {dashboardData.recentBookings.map((booking) => (
-                    <div key={booking.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                  {dashboardData.recentBookings && dashboardData.recentBookings.length > 0 ? (
+                    dashboardData.recentBookings.map((booking) => (
+                      <div key={booking.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
                       <img
                         src={booking.image}
                         alt={booking.title}
@@ -428,7 +429,13 @@ const Dashboard = () => {
                         <p className="text-sm font-medium text-gray-900 mt-1">LKR {booking.price.toLocaleString()}</p>
                       </div>
                     </div>
-                  ))}
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <p>No recent bookings found</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -482,8 +489,9 @@ const Dashboard = () => {
               </div>
               <div className="p-6">
                 <div className="space-y-4">
-                  {dashboardData.upcomingTrips.map((trip) => (
-                    <div key={trip.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  {dashboardData.upcomingTrips && dashboardData.upcomingTrips.length > 0 ? (
+                    dashboardData.upcomingTrips.map((trip) => (
+                      <div key={trip.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center space-x-3">
                         {getTypeIcon(trip.type)}
                         <div>
@@ -496,7 +504,13 @@ const Dashboard = () => {
                         <span className="ml-1">{trip.status}</span>
                       </span>
                     </div>
-                  ))}
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <Clock className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <p>No upcoming trips</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -516,8 +530,9 @@ const Dashboard = () => {
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {dashboardData.recommendations.map((item) => (
-                  <div key={item.id} className="bg-gray-50 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+                {dashboardData.recommendations && dashboardData.recommendations.length > 0 ? (
+                  dashboardData.recommendations.map((item) => (
+                    <div key={item.id} className="bg-gray-50 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
                     <img
                       src={item.image}
                       alt={item.title}
@@ -541,7 +556,13 @@ const Dashboard = () => {
                       </div>
                     </div>
                   </div>
-                ))}
+                  ))
+                ) : (
+                  <div className="col-span-full text-center py-8 text-gray-500">
+                    <Sparkles className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>No recommendations available</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

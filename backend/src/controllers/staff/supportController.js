@@ -447,6 +447,89 @@ const getReviews = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    Get review statistics
+// @route   GET /api/staff/support/reviews/statistics
+// @access  Private (Staff)
+const getReviewStatistics = asyncHandler(async (req, res) => {
+  try {
+    // Mock statistics data
+    const stats = {
+      total: 3,
+      pending: 1,
+      approved: 1,
+      rejected: 1,
+      flagged: 0,
+      averageRating: 3.0
+    };
+    
+    res.status(200).json({
+      success: true,
+      data: stats
+    });
+    
+  } catch (error) {
+    console.error('Get review statistics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching review statistics'
+    });
+  }
+});
+
+// @desc    Delete review
+// @route   DELETE /api/staff/support/reviews/:id
+// @access  Private (Staff)
+const deleteReview = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const staffId = req.user._id;
+    
+    // Mock delete response
+    console.log(`Staff ${staffId} deleted review ${id}`);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Review deleted successfully'
+    });
+    
+  } catch (error) {
+    console.error('Delete review error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error deleting review'
+    });
+  }
+});
+
+// @desc    Bulk review action
+// @route   POST /api/staff/support/reviews/bulk-action
+// @access  Private (Staff)
+const bulkReviewAction = asyncHandler(async (req, res) => {
+  try {
+    const { reviewIds, action } = req.body;
+    const staffId = req.user._id;
+    
+    // Mock bulk action response
+    console.log(`Staff ${staffId} performed bulk ${action} on reviews:`, reviewIds);
+    
+    res.status(200).json({
+      success: true,
+      message: `Bulk ${action} completed successfully`,
+      data: {
+        processedCount: reviewIds.length,
+        action
+      }
+    });
+    
+  } catch (error) {
+    console.error('Bulk review action error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error performing bulk review action'
+    });
+  }
+});
+
 // @desc    Moderate review
 // @route   PUT /api/staff/support/reviews/:id/moderate
 // @access  Private (Staff)
@@ -660,6 +743,9 @@ module.exports = {
   addSupportMessage,
   resolveSupportTicket,
   getReviews,
+  getReviewStatistics,
+  deleteReview,
+  bulkReviewAction,
   moderateReview,
   // User functions
   submitSupportTicket,

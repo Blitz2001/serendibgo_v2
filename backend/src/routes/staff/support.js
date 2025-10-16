@@ -8,6 +8,9 @@ const {
   addSupportMessage,
   resolveSupportTicket,
   getReviews,
+  getReviewStatistics,
+  deleteReview,
+  bulkReviewAction,
   moderateReview
 } = require('../../controllers/staff/supportController');
 const { staffAuth, requirePermission } = require('../../middleware/staffAuth');
@@ -24,6 +27,9 @@ router.post('/tickets/:id/resolve', resolveSupportTicket);
 
 // Review moderation routes
 router.get('/reviews', getReviews);
+router.get('/reviews/statistics', getReviewStatistics);
+router.delete('/reviews/:id', deleteReview);
+router.post('/reviews/bulk-action', bulkReviewAction);
 router.put('/reviews/:id/moderate', moderateReview);
 
 module.exports = router;

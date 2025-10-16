@@ -26,7 +26,6 @@ import {
   Plus,
   Trash2,
   Calendar,
-  DollarSign,
   Languages,
   Briefcase,
   FileText,
@@ -89,7 +88,6 @@ import {
   Calendar as CalendarIcon,
   MapPin as MapPinIcon,
   Users as UsersIcon,
-  DollarSign as DollarSignIcon,
   TrendingUp as TrendingUpIcon,
   BarChart3 as BarChart3Icon,
   PieChart,
@@ -133,7 +131,6 @@ import {
   CalendarIcon as CalendarIconIcon,
   MapPinIcon as MapPinIconIcon,
   UsersIcon as UsersIconIcon,
-  DollarSignIcon as DollarSignIconIcon,
   TrendingUpIcon as TrendingUpIconIcon,
   BarChart3Icon as BarChart3IconIcon,
   PieChart as PieChartIcon,
@@ -179,7 +176,6 @@ import ReviewManagement from './components/ReviewManagement'
 import AnalyticsManagement from './components/AnalyticsManagement'
 import ApprovalManagement from '../../components/staff/management/ApprovalManagement'
 import BookingManagement from '../../components/staff/management/BookingManagement'
-import FinancialManagement from '../../components/staff/management/FinancialManagement'
 
 const StaffDashboard = () => {
   const navigate = useNavigate()
@@ -203,7 +199,6 @@ const StaffDashboard = () => {
     pendingApprovals: 0,
     totalUsers: 0,
     activeBookings: 0,
-    totalRevenue: 0,
     pendingReviews: 0,
     supportTickets: 0,
     newGuides: 0,
@@ -248,7 +243,6 @@ const StaffDashboard = () => {
             pendingApprovals: data.pendingApprovals || 0,
             totalUsers: data.totalUsers || 0,
             activeBookings: data.activeBookings || 0,
-            totalRevenue: data.totalRevenue || 0,
             pendingReviews: data.pendingReviews || 0,
             supportTickets: data.supportTickets || 0,
             newGuides: data.newGuides || 0,
@@ -358,7 +352,6 @@ const StaffDashboard = () => {
     { id: 'overview', label: 'Overview', icon: Home },
     { id: 'approvals', label: 'Approvals', icon: CheckCircle },
     { id: 'bookings', label: 'Bookings', icon: Calendar },
-    { id: 'financial', label: 'Financial', icon: DollarSign },
     { id: 'trips', label: 'Trip Management', icon: Map },
     { id: 'custom-trips', label: 'Custom Trips', icon: Compass },
     { id: 'drivers', label: 'Driver Management', icon: UserCheck },
@@ -408,7 +401,7 @@ const StaffDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-cyan-50">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 shadow-sm">
+      <div className="bg-white border-b border-slate-200 shadow-sm fixed top-0 left-0 right-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -499,11 +492,11 @@ const StaffDashboard = () => {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 sticky top-8">
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 sticky top-24">
               <nav className="space-y-2">
                 {tabs.map((tab) => {
                   const Icon = tab.icon
@@ -608,23 +601,6 @@ const StaffDashboard = () => {
                     </div>
                     <h3 className="font-semibold text-slate-900 mb-1">Active Bookings</h3>
                     <p className="text-sm text-slate-600">Current reservations</p>
-                  </div>
-
-                  <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                        <DollarSign className="h-6 w-6 text-purple-600" />
-                      </div>
-                      <span className="text-2xl font-bold text-slate-900">
-                        {dashboardLoading ? (
-                          <div className="w-16 h-6 bg-slate-200 rounded animate-pulse"></div>
-                        ) : (
-                          `LKR ${staffStats.totalRevenue.toLocaleString()}`
-                        )}
-                      </span>
-                    </div>
-                    <h3 className="font-semibold text-slate-900 mb-1">Total Revenue</h3>
-                    <p className="text-sm text-slate-600">Platform earnings</p>
                   </div>
                 </div>
 
@@ -868,19 +844,7 @@ const StaffDashboard = () => {
                     <h2 className="text-2xl font-bold text-slate-900">Performance Overview</h2>
                   </div>
                   
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Revenue Chart Placeholder */}
-                    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-200">
-                      <h3 className="text-lg font-semibold text-slate-900 mb-4">Revenue Trend</h3>
-                      <div className="h-48 bg-white rounded-lg flex items-center justify-center border border-slate-200">
-                        <div className="text-center">
-                          <BarChart3 className="h-12 w-12 text-slate-400 mx-auto mb-2" />
-                          <p className="text-slate-500">Chart will be implemented</p>
-                          <p className="text-sm text-slate-400">Revenue analytics coming soon</p>
-                        </div>
-                      </div>
-                    </div>
-
+                  <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
                     {/* User Growth Chart Placeholder */}
                     <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
                       <h3 className="text-lg font-semibold text-slate-900 mb-4">User Growth</h3>
@@ -981,32 +945,6 @@ const StaffDashboard = () => {
                       </div>
                     </div>
 
-                    {/* Financial Report */}
-                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center">
-                          <DollarSign className="h-6 w-6 text-white" />
-                        </div>
-                        <span className="text-sm font-medium text-purple-600">Financial</span>
-                      </div>
-                      <h4 className="font-semibold text-slate-900 mb-2">Financial Report</h4>
-                      <p className="text-sm text-slate-600 mb-4">Revenue analysis, transactions, and financial performance</p>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleGeneratePDFReport('financial', '30d')}
-                          className="flex-1 bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
-                        >
-                          30 Days
-                        </button>
-                        <button
-                          onClick={() => handleGeneratePDFReport('financial', '90d')}
-                          className="flex-1 bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
-                        >
-                          90 Days
-                        </button>
-                      </div>
-                    </div>
-
                     {/* Support Report */}
                     <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-6 border border-red-200">
                       <div className="flex items-center justify-between mb-4">
@@ -1077,13 +1015,6 @@ const StaffDashboard = () => {
               </div>
             )}
 
-            {/* Financial Management Tab */}
-            {activeTab === 'financial' && (
-              <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
-                <FinancialManagement />
-              </div>
-            )}
-
             {/* Trip Management Tab */}
             {activeTab === 'trips' && (
               <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
@@ -1141,7 +1072,7 @@ const StaffDashboard = () => {
             )}
 
             {/* Other tabs will be implemented in separate components */}
-            {activeTab !== 'overview' && activeTab !== 'approvals' && activeTab !== 'bookings' && activeTab !== 'financial' && activeTab !== 'trips' && activeTab !== 'custom-trips' && activeTab !== 'hotels' && activeTab !== 'guides' && activeTab !== 'drivers' && activeTab !== 'support' && activeTab !== 'reviews' && activeTab !== 'analytics' && (
+            {activeTab !== 'overview' && activeTab !== 'approvals' && activeTab !== 'bookings' && activeTab !== 'trips' && activeTab !== 'custom-trips' && activeTab !== 'hotels' && activeTab !== 'guides' && activeTab !== 'drivers' && activeTab !== 'support' && activeTab !== 'reviews' && activeTab !== 'analytics' && (
               <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
                 <div className="text-center py-12">
                   <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
