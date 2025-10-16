@@ -65,6 +65,7 @@ const TourDetails = () => {
   const [selectedBookingDate, setSelectedBookingDate] = useState(new Date())
   const [activeTab, setActiveTab] = useState('overview')
   const [bookingLoading, setBookingLoading] = useState(false)
+  const [dateError, setDateError] = useState('')
 
   // Fetch tour data
   useEffect(() => {
@@ -111,11 +112,17 @@ const TourDetails = () => {
       return
     }
 
-    // Validate booking data
-    if (!bookingData.date || !bookingData.groupSize) {
-      toast.error('Please fill in all required fields')
-      return
-    }
+     // Validate booking data
+     if (!bookingData.date || !bookingData.groupSize) {
+       toast.error('Please fill in all required fields')
+       return
+     }
+
+     // Validate tour date
+     if (!validateTourDate(bookingData.date)) {
+       toast.error(dateError || 'Please select a valid tour date')
+       return
+     }
 
     try {
       setBookingLoading(true)
@@ -200,6 +207,43 @@ const TourDetails = () => {
 
   const toggleWishlist = () => {
     setIsWishlisted(!isWishlisted)
+  }
+
+  // Validate tour date
+  const validateTourDate = (dateString) => {
+    if (!dateString) {
+      setDateError('Please select a tour date')
+      return false
+    }
+
+    const selectedDate = new Date(dateString)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0) // Reset time to start of day
+    
+    // Check if date is in the past
+    if (selectedDate < today) {
+      setDateError('Tour date cannot be in the past')
+      return false
+    }
+
+    // Check if date is too far in the future (optional - 1 year limit)
+    const oneYearFromNow = new Date()
+    oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1)
+    
+    if (selectedDate > oneYearFromNow) {
+      setDateError('Tour date cannot be more than 1 year in advance')
+      return false
+    }
+
+    setDateError('')
+    return true
+  }
+
+  // Handle date change with validation
+  const handleDateChange = (e) => {
+    const dateValue = e.target.value
+    setBookingData({...bookingData, date: dateValue})
+    validateTourDate(dateValue)
   }
 
   const nextImage = () => {
@@ -749,10 +793,25 @@ const TourDetails = () => {
                     <input
                       type="date"
                       value={bookingData.date}
-                      onChange={(e) => setBookingData({...bookingData, date: e.target.value})}
-                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 font-medium transition-all duration-200 hover:border-slate-300"
+                      onChange={handleDateChange}
+                      min={new Date().toISOString().split('T')[0]}
+                      className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl focus:ring-2 focus:ring-blue-500 text-slate-900 font-medium transition-all duration-200 hover:border-slate-300 ${
+                        dateError 
+                          ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+                          : 'border-slate-200 focus:border-blue-500'
+                      }`}
                       required
                     />
+                    {dateError && (
+                      <div className="absolute -bottom-6 left-0 text-red-500 text-sm flex items-center gap-1">
+                        <AlertCircle className="w-4 h-4" />
+                        {dateError}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-sm text-slate-600 flex items-center gap-1">
+                    <Info className="w-4 h-4" />
+                    Select a date from today onwards
                   </div>
                 </div>
 

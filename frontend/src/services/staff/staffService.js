@@ -30,6 +30,15 @@ class StaffService {
         throw new Error(`Validation error: ${data.errors.join(', ')}`);
       }
       
+      // Provide more detailed error messages
+      if (response.status === 400) {
+        throw new Error(data.message || 'Bad request - please check your input');
+      } else if (response.status === 404) {
+        throw new Error(data.message || 'Resource not found');
+      } else if (response.status === 500) {
+        throw new Error(data.message || 'Server error - please try again later');
+      }
+      
       throw new Error(data.message || 'Request failed');
     }
     
@@ -265,11 +274,15 @@ class StaffService {
   }
 
   async updateVehicleStatus(vehicleId, action, reason = '') {
+    console.log('🚀 updateVehicleStatus called:', { vehicleId, action, reason });
+    
     const response = await fetch(`${this.baseURL}/vehicles/${vehicleId}/status`, {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify({ action, reason }),
     });
+    
+    console.log('🚀 updateVehicleStatus response:', response.status, response.statusText);
     
     return this.handleResponse(response);
   }

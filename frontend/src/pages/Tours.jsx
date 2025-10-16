@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { 
   MapPin, 
   Calendar, 
@@ -39,6 +39,7 @@ const Tours = () => {
     setFilters,
     clearFilters 
   } = useTour()
+  const navigate = useNavigate()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState('grid')
@@ -389,7 +390,10 @@ const Tours = () => {
               <Eye className="h-5 w-5 mr-2 group-hover/btn:text-blue-500 transition-colors" />
               View Details
             </Link>
-            <button className="flex-1 px-6 py-4 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-2xl hover:from-blue-700 hover:to-cyan-600 transition-all duration-300 font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center group/btn">
+            <button 
+              onClick={() => navigate(`/booking/${tour._id}`)}
+              className="flex-1 px-6 py-4 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-2xl hover:from-blue-700 hover:to-cyan-600 transition-all duration-300 font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center group/btn"
+            >
               <BookOpen className="h-5 w-5 mr-2 group-hover/btn:scale-110 transition-transform" />
               Book Now
             </button>
