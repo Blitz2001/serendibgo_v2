@@ -63,6 +63,29 @@ const getAnalyticsOverview = asyncHandler(async (req, res) => {
             } 
           },
           { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+        ]),
+        // Revenue breakdown by service type
+        byServiceType: await Booking.aggregate([
+          { $match: { status: { $in: ['confirmed', 'completed'] } } },
+          {
+            $group: {
+              _id: {
+                $cond: [
+                  { $ne: ['$tour', null] }, 'tours',
+                  { $cond: [
+                    { $ne: ['$hotel', null] }, 'hotels',
+                    { $cond: [
+                      { $ne: ['$vehicle', null] }, 'vehicles',
+                      'other'
+                    ]}
+                  ]}
+                ]
+              },
+              total: { $sum: '$totalAmount' },
+              count: { $sum: 1 }
+            }
+          },
+          { $sort: { total: -1 } }
         ])
       },
       
@@ -74,7 +97,10 @@ const getAnalyticsOverview = asyncHandler(async (req, res) => {
         ]),
         conversionRate: 0.15, // Mock data - would calculate from actual data
         customerSatisfaction: 4.2, // Mock data - would calculate from reviews
-        platformUptime: 99.8 // Mock data - would get from monitoring
+        platformUptime: 99.8, // Mock data - would get from monitoring
+        bookingCompletionRate: await Booking.aggregate([
+          { $group: { _id: null, total: { $sum: 1 }, completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } } } }
+        ]).then(result => result[0] ? Math.round((result[0].completed / result[0].total) * 100) : 0)
       },
       
       // Growth Metrics
@@ -159,6 +185,53 @@ const getAnalyticsOverview = asyncHandler(async (req, res) => {
     analytics.bookings.revenue = analytics.bookings.revenue.length > 0 ? analytics.bookings.revenue[0].total : 0;
     analytics.bookings.recentRevenue = analytics.bookings.recentRevenue.length > 0 ? analytics.bookings.recentRevenue[0].total : 0;
     analytics.performance.averageBookingValue = analytics.performance.averageBookingValue.length > 0 ? analytics.performance.averageBookingValue[0].average : 0;
+    
+    // Format revenue breakdown by service type
+    const revenueBreakdown = {
+      tours: analytics.bookings.byServiceType.find(s => s._id === 'tours')?.total || 0,
+      hotels: analytics.bookings.byServiceType.find(s => s._id === 'hotels')?.total || 0,
+      vehicles: analytics.bookings.byServiceType.find(s => s._id === 'vehicles')?.total || 0,
+      other: analytics.bookings.byServiceType.find(s => s._id === 'other')?.total || 0
+    };
+    
+    analytics.bookings.revenueBreakdown = revenueBreakdown;
+    
+    // Calculate growth rates
+    const previousStartDate = new Date(startDate);
+    previousStartDate.setDate(previousStartDate.getDate() - (period === '7d' ? 7 : 30));
+
+    const previousUsers = await User.countDocuments({
+      createdAt: { $gte: previousStartDate, $lt: startDate }
+    });
+
+    const previousBookings = await Booking.countDocuments({
+      createdAt: { $gte: previousStartDate, $lt: startDate }
+    });
+
+    const previousRevenue = await Booking.aggregate([
+      { 
+        $match: { 
+          status: { $in: ['confirmed', 'completed'] },
+          createdAt: { $gte: previousStartDate, $lt: startDate }
+        } 
+      },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    ]).then(result => result[0]?.total || 0);
+
+    const currentUsers = analytics.users.new;
+    const currentBookings = analytics.bookings.recent;
+    const currentRevenue = analytics.bookings.recentRevenue;
+
+    const userGrowthRate = previousUsers > 0 ? Math.round(((currentUsers - previousUsers) / previousUsers) * 100 * 10) / 10 : 0;
+    const bookingGrowthRate = previousBookings > 0 ? Math.round(((currentBookings - previousBookings) / previousBookings) * 100 * 10) / 10 : 0;
+    const revenueGrowthRate = previousRevenue > 0 ? Math.round(((currentRevenue - previousRevenue) / previousRevenue) * 100 * 10) / 10 : 0;
+
+    // Add growth rates to analytics
+    analytics.growthRates = {
+      users: userGrowthRate,
+      bookings: bookingGrowthRate,
+      revenue: revenueGrowthRate
+    };
     
     res.status(200).json({
       success: true,

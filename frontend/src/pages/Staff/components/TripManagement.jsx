@@ -582,9 +582,9 @@ const TripManagement = () => {
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">All Difficulties</option>
-                <option value="Easy">Easy</option>
-                <option value="Moderate">Moderate</option>
-                <option value="Hard">Hard</option>
+                <option value="easy">Easy</option>
+                <option value="moderate">Moderate</option>
+                <option value="challenging">Challenging</option>
               </select>
             </div>
           </div>
@@ -973,10 +973,9 @@ const TripManagement = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         required
                       >
-                        <option value="Easy">Easy</option>
-                        <option value="Moderate">Moderate</option>
-                        <option value="Challenging">Challenging</option>
-                        <option value="Expert">Expert</option>
+                        <option value="easy">Easy</option>
+                        <option value="moderate">Moderate</option>
+                        <option value="challenging">Challenging</option>
                       </select>
                     </div>
                     <div>

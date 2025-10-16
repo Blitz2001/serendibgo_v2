@@ -88,6 +88,8 @@ const AdminDashboard = () => {
   // Permissions management state
   const [permissions, setPermissions] = useState([]);
   const [permissionTemplates, setPermissionTemplates] = useState([]);
+  const [permissionSearchTerm, setPermissionSearchTerm] = useState('');
+  const [permissionStatusFilter, setPermissionStatusFilter] = useState('all');
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [selectedPermission, setSelectedPermission] = useState(null);

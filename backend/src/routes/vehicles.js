@@ -61,7 +61,12 @@ router.post('/register', [
 router.use(protect);
 
 // Driver/Staff/Admin routes
-router.post('/', authorize('driver', 'staff', 'admin'), createVehicle);
+router.post('/', [
+  authorize('driver', 'staff', 'admin'),
+  upload.fields([
+    { name: 'images', maxCount: 10 }
+  ])
+], createVehicle);
 router.put('/:id', authorize('driver', 'staff', 'admin'), updateVehicle);
 router.delete('/:id', authorize('driver', 'staff', 'admin'), deleteVehicle);
 router.get('/driver/:driverId', getDriverVehicles);
