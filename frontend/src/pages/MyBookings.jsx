@@ -6,9 +6,10 @@ import { bookingAPI } from '../services/hotels/hotelService'
 import { guideService } from '../services/guideService'
 import { toast } from 'react-hot-toast'
 import ReviewForm from '../components/reviews/ReviewForm'
+import ReviewPopup from '../components/reviews/ReviewPopup'
 
 const MyBookings = () => {
-  const { user } = useAuth()
+  const { user, isAuthenticated, token } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [bookings, setBookings] = useState([])
@@ -22,12 +23,27 @@ const MyBookings = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [showReviewForm, setShowReviewForm] = useState(false)
   const [selectedBookingForReview, setSelectedBookingForReview] = useState(null)
+  const [showReviewPopup, setShowReviewPopup] = useState(false)
+  const [selectedBookingForPopup, setSelectedBookingForPopup] = useState(null)
+  const [existingReviews, setExistingReviews] = useState([])
+  const [reviewedBookings, setReviewedBookings] = useState(new Set())
+  const [reviewStats, setReviewStats] = useState(null)
 
   useEffect(() => {
-    if (user) {
+    if (user && isAuthenticated) {
       fetchBookings()
+    } else if (!isAuthenticated) {
+      console.log('MyBookings: User not authenticated, redirecting to login');
+      navigate('/login');
     }
-  }, [user])
+  }, [user, isAuthenticated, navigate])
+
+  // Check for existing reviews when bookings are loaded
+  useEffect(() => {
+    if (bookings.length > 0 && isAuthenticated) {
+      checkExistingReviews()
+    }
+  }, [bookings, isAuthenticated])
 
   // Handle navigation state from payment page
   useEffect(() => {
@@ -185,7 +201,7 @@ const MyBookings = () => {
             startDate: trip.startDate,
             endDate: trip.endDate,
             groupSize: trip.groupSize,
-            guideName: trip.assignedGuide?.name || 'TBD',
+            guideName: trip.guide?.name || 'TBD',
             interests: trip.interests?.join(', ') || '',
             accommodation: trip.accommodation || '',
             bookingReference: data.data.booking.bookingReference
@@ -239,6 +255,600 @@ const MyBookings = () => {
     fetchBookings()
   }
 
+  // Check for existing reviews for all bookings
+  const checkExistingReviews = async () => {
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api';
+      const authToken = token || localStorage.getItem('token');
+      const reviewedSet = new Set();
+
+      // Check guide bookings
+      for (const booking of guideBookings) {
+        if (booking.guide && (booking.status === 'completed' || (booking.status === 'confirmed' && booking.paymentStatus === 'paid'))) {
+          const guideId = booking.guide._id || booking.guide;
+          const bookingId = booking._id || booking.id || booking.bookingId;
+          
+          try {
+            const response = await fetch(`${API_BASE_URL}/reviews/check?user=${user._id}&guide=${guideId}&booking=${bookingId}&isActive=true`, {
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data.data && data.data.length > 0) {
+                reviewedSet.add(bookingId);
+              }
+            }
+          } catch (error) {
+            console.error('MyBookings: Error checking guide review:', error);
+          }
+        }
+      }
+
+      // Check hotel bookings
+      for (const booking of bookings) {
+        if (booking.hotel && (booking.bookingStatus === 'completed' || (booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'paid'))) {
+          const hotelId = booking.hotel._id || booking.hotel;
+          const bookingId = booking._id || booking.id || booking.bookingId;
+          
+          try {
+            const response = await fetch(`${API_BASE_URL}/hotel-reviews?user=${user._id}&hotel=${hotelId}&booking=${bookingId}&isActive=true`, {
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data.data && data.data.length > 0) {
+                reviewedSet.add(bookingId);
+              }
+            }
+          } catch (error) {
+            console.error('MyBookings: Error checking hotel review:', error);
+          }
+        }
+      }
+
+      // Check custom trip bookings
+      for (const trip of customTrips) {
+        if (trip.guide && (trip.status === 'completed' || (trip.status === 'confirmed' && trip.paymentStatus === 'paid'))) {
+          const guideId = trip.guide._id || trip.guide;
+          const bookingId = trip._id || trip.id || trip.bookingId;
+          
+          try {
+            const response = await fetch(`${API_BASE_URL}/reviews/check?user=${user._id}&guide=${guideId}&booking=${bookingId}&isActive=true`, {
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data.data && data.data.length > 0) {
+                reviewedSet.add(bookingId);
+              }
+            }
+          } catch (error) {
+            console.error('MyBookings: Error checking custom trip review:', error);
+          }
+        }
+      }
+
+      setReviewedBookings(reviewedSet);
+      console.log('MyBookings: Reviewed bookings:', Array.from(reviewedSet));
+    } catch (error) {
+      console.error('MyBookings: Error checking existing reviews:', error);
+    }
+  };
+
+  // Check if user has already reviewed a service
+  const hasUserReviewed = async (booking) => {
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api';
+      const authToken = token || localStorage.getItem('token');
+      
+      if (booking.type === 'guide' && booking.guide) {
+        const guideId = booking.guide._id || booking.guide;
+        const bookingId = booking._id || booking.id || booking.bookingId;
+        
+        const response = await fetch(`${API_BASE_URL}/reviews?user=${user._id}&guide=${guideId}&booking=${bookingId}`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          return data.data && data.data.length > 0;
+        }
+      } else if (booking.type === 'hotel' && booking.hotel) {
+        const hotelId = booking.hotel._id || booking.hotel;
+        const bookingId = booking._id || booking.id || booking.bookingId;
+        
+        const response = await fetch(`${API_BASE_URL}/hotel-reviews?user=${user._id}&hotel=${hotelId}&booking=${bookingId}`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          return data.data && data.data.length > 0;
+        }
+      } else if (booking.type === 'custom' && booking.guide) {
+        const guideId = booking.guide._id || booking.guide;
+        const bookingId = booking._id || booking.id || booking.bookingId;
+        
+        const response = await fetch(`${API_BASE_URL}/reviews/check?user=${user._id}&guide=${guideId}&booking=${bookingId}&isActive=true`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          return data.data && data.data.length > 0;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('MyBookings: Error checking existing review:', error);
+      return false;
+    }
+  };
+
+  const handleWriteReviewPopup = async (booking) => {
+    // Check authentication first
+    if (!isAuthenticated || !token) {
+      console.log('MyBookings: User not authenticated, redirecting to login');
+      toast.error('Please log in to write a review');
+      navigate('/login');
+      return;
+    }
+
+    console.log('MyBookings: Opening review popup for booking:', booking);
+    setSelectedBookingForPopup(booking)
+    
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api';
+    
+    // Use token from context, fallback to localStorage
+    const authToken = token || localStorage.getItem('token');
+    
+        // Fetch existing reviews for this entity
+        try {
+          let reviews = [];
+          let stats = null;
+          
+          if (booking.type === 'guide' && booking.guide) {
+            console.log('MyBookings: Fetching guide reviews for:', booking.guide._id || booking.guide);
+            
+            // Fetch reviews
+            const reviewsResponse = await fetch(`${API_BASE_URL}/reviews/guide/${booking.guide._id || booking.guide}`, {
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            if (reviewsResponse.ok) {
+              const reviewsData = await reviewsResponse.json();
+              reviews = reviewsData.data || [];
+              console.log('MyBookings: Fetched guide reviews:', reviews);
+            }
+            
+            // Fetch review statistics
+            const statsResponse = await fetch(`${API_BASE_URL}/reviews/guide/${booking.guide._id || booking.guide}/stats`, {
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            if (statsResponse.ok) {
+              const statsData = await statsResponse.json();
+              stats = statsData.data;
+              console.log('MyBookings: Fetched guide review stats:', stats);
+            }
+          } else if (booking.type === 'hotel' && booking.hotel) {
+            console.log('MyBookings: Fetching hotel reviews for:', booking.hotel._id || booking.hotel);
+            const response = await fetch(`${API_BASE_URL}/hotel-reviews/hotel/${booking.hotel._id || booking.hotel}`, {
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            if (response.ok) {
+              const data = await response.json();
+              reviews = data.data.reviews || [];
+              console.log('MyBookings: Fetched hotel reviews:', reviews);
+            }
+          } else if (booking.type === 'custom' && booking.guide) {
+            console.log('MyBookings: Fetching custom trip reviews for:', booking.guide._id || booking.guide);
+            
+            // Fetch reviews
+            const reviewsResponse = await fetch(`${API_BASE_URL}/reviews/guide/${booking.guide._id || booking.guide}`, {
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            if (reviewsResponse.ok) {
+              const reviewsData = await reviewsResponse.json();
+              reviews = reviewsData.data || [];
+              console.log('MyBookings: Fetched custom trip reviews:', reviews);
+            }
+            
+            // Fetch review statistics
+            const statsResponse = await fetch(`${API_BASE_URL}/reviews/guide/${booking.guide._id || booking.guide}/stats`, {
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            if (statsResponse.ok) {
+              const statsData = await statsResponse.json();
+              stats = statsData.data;
+              console.log('MyBookings: Fetched custom trip review stats:', stats);
+            }
+          }
+          
+          setExistingReviews(reviews);
+          setReviewStats(stats);
+        } catch (error) {
+          console.error('MyBookings: Error fetching reviews:', error);
+          setExistingReviews([]);
+          setReviewStats(null);
+        }
+    
+    console.log('MyBookings: Setting showReviewPopup to true');
+    setShowReviewPopup(true);
+  };
+
+  const handleReviewPopupSubmit = async (reviewData) => {
+    try {
+      // Check authentication first
+      if (!isAuthenticated || !token) {
+        console.log('MyBookings: User not authenticated, redirecting to login');
+        toast.error('Please log in to submit a review');
+        navigate('/login');
+        return;
+      }
+
+      const booking = selectedBookingForPopup;
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api';
+      let response;
+      
+      // Use token from context, fallback to localStorage
+      const authToken = token || localStorage.getItem('token');
+      console.log('MyBookings: Using auth token:', authToken ? 'Present' : 'Missing'); // Added debug
+      
+      console.log('MyBookings: Submitting review for booking:', booking);
+      console.log('MyBookings: Review data:', reviewData);
+      console.log('MyBookings: User authenticated:', isAuthenticated); // Added debug
+      console.log('MyBookings: Token from localStorage:', localStorage.getItem('token')); // Added debug
+      console.log('MyBookings: Token from context:', token); // Added debug
+      console.log('MyBookings: Token type:', typeof token); // Added debug
+      console.log('MyBookings: Token length:', token ? token.length : 'null'); // Added debug
+      console.log('MyBookings: User object:', user); // Added debug
+      console.log('MyBookings: API_BASE_URL:', API_BASE_URL);
+      
+      if (booking.type === 'guide') {
+        console.log('MyBookings: Processing guide review');
+        console.log('MyBookings: booking.guide:', booking.guide);
+        console.log('MyBookings: booking._id:', booking._id);
+        console.log('MyBookings: booking object keys:', Object.keys(booking));
+        console.log('MyBookings: Full booking object:', JSON.stringify(booking, null, 2));
+        console.log('MyBookings: reviewData:', reviewData);
+        console.log('MyBookings: reviewData.rating:', reviewData.rating);
+        console.log('MyBookings: reviewData.review:', reviewData.review);
+        
+        // Check if we have the required fields
+        const guideId = booking.guide?._id || booking.guide;
+        const bookingId = booking._id || booking.id || booking.bookingId;
+        
+        console.log('MyBookings: Extracted guideId:', guideId);
+        console.log('MyBookings: Extracted bookingId:', bookingId);
+        console.log('MyBookings: Available booking ID fields:', {
+          '_id': booking._id,
+          'id': booking.id,
+          'bookingId': booking.bookingId
+        });
+        
+        if (!guideId) {
+          throw new Error('Guide ID is missing from booking');
+        }
+        if (!bookingId) {
+          throw new Error(`Booking ID is missing from booking. Available fields: ${Object.keys(booking).join(', ')}`);
+        }
+        
+        const requestBody = {
+          tourId: 'guide-service',
+          guideId: guideId,
+          bookingId: bookingId,
+          rating: reviewData.rating,
+          comment: reviewData.review
+        };
+        
+        console.log('MyBookings: Guide review request body:', requestBody);
+        console.log('MyBookings: Request body validation:', {
+          tourId: requestBody.tourId,
+          guideId: requestBody.guideId,
+          bookingId: requestBody.bookingId,
+          rating: requestBody.rating,
+          comment: requestBody.comment,
+          tourIdValid: !!requestBody.tourId,
+          guideIdValid: !!requestBody.guideId,
+          bookingIdValid: !!requestBody.bookingId,
+          ratingValid: !!requestBody.rating,
+          commentValid: !!requestBody.comment
+        });
+        
+        response = await fetch(`${API_BASE_URL}/reviews`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}` // Used authToken
+          },
+          body: JSON.stringify(requestBody)
+        });
+      } else if (booking.type === 'hotel') {
+        console.log('MyBookings: Processing hotel review');
+        console.log('MyBookings: booking.hotel:', booking.hotel);
+        console.log('MyBookings: booking._id:', booking._id);
+        console.log('MyBookings: booking object keys:', Object.keys(booking));
+        console.log('MyBookings: Full booking object:', JSON.stringify(booking, null, 2));
+        
+        // Check if we have the required fields
+        const hotelId = booking.hotel?._id || booking.hotel;
+        const bookingId = booking._id || booking.id || booking.bookingId;
+        
+        console.log('MyBookings: Extracted hotelId:', hotelId);
+        console.log('MyBookings: Extracted bookingId:', bookingId);
+        console.log('MyBookings: Available booking ID fields:', {
+          '_id': booking._id,
+          'id': booking.id,
+          'bookingId': booking.bookingId
+        });
+        
+        if (!hotelId) {
+          throw new Error('Hotel ID is missing from booking');
+        }
+        if (!bookingId) {
+          throw new Error(`Booking ID is missing from booking. Available fields: ${Object.keys(booking).join(', ')}`);
+        }
+        
+        const requestBody = {
+          hotelId: hotelId,
+          bookingId: bookingId,
+          rating: {
+            overall: reviewData.rating,
+            cleanliness: reviewData.rating,
+            location: reviewData.rating,
+            service: reviewData.rating,
+            value: reviewData.rating,
+            amenities: reviewData.rating
+          },
+          content: reviewData.review
+        };
+        
+        console.log('MyBookings: Hotel review request body:', requestBody);
+        
+        response = await fetch(`${API_BASE_URL}/hotel-reviews`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}` // Used authToken
+          },
+          body: JSON.stringify(requestBody)
+        });
+      } else if (booking.type === 'custom') {
+        console.log('MyBookings: Processing custom trip review');
+        console.log('MyBookings: booking.guide:', booking.guide);
+        console.log('MyBookings: booking._id:', booking._id);
+        console.log('MyBookings: booking object keys:', Object.keys(booking));
+        console.log('MyBookings: Full booking object:', JSON.stringify(booking, null, 2));
+        console.log('MyBookings: reviewData:', reviewData);
+        console.log('MyBookings: reviewData.rating:', reviewData.rating);
+        console.log('MyBookings: reviewData.review:', reviewData.review);
+        
+        // Check if we have the required fields
+        const guideId = booking.guide?._id || booking.guide;
+        const bookingId = booking._id || booking.id || booking.bookingId;
+        
+        console.log('MyBookings: Extracted guideId:', guideId);
+        console.log('MyBookings: Extracted bookingId:', bookingId);
+        console.log('MyBookings: Available booking ID fields:', {
+          '_id': booking._id,
+          'id': booking.id,
+          'bookingId': booking.bookingId
+        });
+        
+        console.log('MyBookings: Custom trip booking structure:', {
+          booking: booking,
+          guide: booking.guide,
+          guideType: typeof booking.guide,
+          guideKeys: booking.guide ? Object.keys(booking.guide) : 'N/A',
+          allBookingKeys: Object.keys(booking)
+        });
+        
+        if (!guideId) {
+          console.error('MyBookings: Guide ID extraction failed:', {
+            guide: booking.guide,
+            guideId: booking.guide?._id,
+            guideDirect: booking.guide,
+            bookingKeys: Object.keys(booking)
+          });
+          throw new Error(`Guide ID is missing from custom trip booking. Available fields: ${Object.keys(booking).join(', ')}. Guide: ${JSON.stringify(booking.guide)}`);
+        }
+        if (!bookingId) {
+          throw new Error(`Booking ID is missing from custom trip booking. Available fields: ${Object.keys(booking).join(', ')}`);
+        }
+        
+        const requestBody = {
+          tourId: 'custom-trip-service',
+          guideId: guideId,
+          bookingId: bookingId,
+          rating: reviewData.rating,
+          comment: reviewData.review
+        };
+        
+        console.log('MyBookings: Custom trip review request body:', requestBody);
+        console.log('MyBookings: Request body validation:', {
+          tourId: requestBody.tourId,
+          guideId: requestBody.guideId,
+          bookingId: requestBody.bookingId,
+          rating: requestBody.rating,
+          comment: requestBody.comment,
+          tourIdValid: !!requestBody.tourId,
+          guideIdValid: !!requestBody.guideId,
+          bookingIdValid: !!requestBody.bookingId,
+          ratingValid: !!requestBody.rating,
+          commentValid: !!requestBody.comment
+        });
+        
+        response = await fetch(`${API_BASE_URL}/reviews`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify(requestBody)
+        });
+      } else {
+        console.log('MyBookings: Unknown booking type:', booking.type);
+        throw new Error(`Unsupported booking type: ${booking.type}`);
+      }
+      
+        console.log('MyBookings: Response status:', response?.status);
+        console.log('MyBookings: Response ok:', response?.ok);
+        
+        if (response && response.ok) {
+          const responseData = await response.json();
+          console.log('MyBookings: Review submitted successfully:', responseData);
+          toast.success('Review submitted successfully!');
+          setShowReviewPopup(false);
+          setSelectedBookingForPopup(null);
+          fetchBookings(); // Refresh bookings
+          checkExistingReviews(); // Refresh reviewed bookings
+        } else {
+          const errorData = await response?.json().catch(() => null);
+          console.error('MyBookings: Review submission failed:', errorData);
+          
+          // Handle specific error cases
+          if (response?.status === 400 && errorData?.message?.includes('already reviewed')) {
+            toast.error('You have already reviewed this service!');
+          } else if (response?.status === 500 && errorData?.error?.includes('duplicate key')) {
+            toast.error('You have already reviewed this service!');
+          } else {
+            toast.error(`Failed to submit review: ${errorData?.message || 'Unknown error'}`);
+          }
+          
+          throw new Error(`Failed to submit review: ${response?.status} ${response?.statusText}`);
+        }
+    } catch (error) {
+      console.error('MyBookings: Error submitting review:', error);
+      throw error;
+    }
+  };
+
+  // Handle edit review
+  const handleEditReview = async (reviewId, editData) => {
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api';
+      const authToken = token || localStorage.getItem('token');
+      
+      console.log('MyBookings: Editing review:', { reviewId, editData });
+      
+      const response = await fetch(`${API_BASE_URL}/reviews/${reviewId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          rating: editData.rating,
+          comment: editData.comment
+        })
+      });
+      
+      if (response.ok) {
+        console.log('MyBookings: Review updated successfully');
+        // Refresh the review data
+        if (selectedBookingForPopup) {
+          await handleWriteReviewPopup(selectedBookingForPopup);
+        }
+      } else {
+        const errorData = await response.json().catch(() => null);
+        console.error('MyBookings: Error updating review:', errorData);
+        throw new Error(`Failed to update review: ${response.status} ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('MyBookings: Error editing review:', error);
+      throw error;
+    }
+  };
+
+  // Handle delete review
+  const handleDeleteReview = async (reviewId) => {
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api';
+      const authToken = token || localStorage.getItem('token');
+      
+      console.log('MyBookings: Deleting review:', reviewId);
+      
+      const response = await fetch(`${API_BASE_URL}/reviews/${reviewId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (response.ok) {
+        console.log('MyBookings: Review deleted successfully');
+        // Refresh the review data
+        if (selectedBookingForPopup) {
+          await handleWriteReviewPopup(selectedBookingForPopup);
+        }
+      } else {
+        const errorData = await response.json().catch(() => null);
+        console.error('MyBookings: Error deleting review:', errorData);
+        throw new Error(`Failed to delete review: ${response.status} ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('MyBookings: Error deleting review:', error);
+      throw error;
+    }
+  };
+
+  const getEntityName = (booking) => {
+    if (booking.type === 'guide' && booking.guide) {
+      return `${booking.guide.firstName} ${booking.guide.lastName}`;
+    } else if (booking.type === 'hotel' && booking.hotel) {
+      return booking.hotel.name;
+    } else if (booking.type === 'vehicle' && booking.vehicle) {
+      return booking.vehicle.name;
+    } else if (booking.type === 'custom') {
+      return 'Custom Trip';
+    }
+    return 'Service';
+  };
+
+  const getEntityType = (booking) => {
+    if (booking.type === 'guide') return 'guide';
+    if (booking.type === 'hotel') return 'hotel';
+    if (booking.type === 'vehicle') return 'vehicle';
+    if (booking.type === 'custom') return 'trip';
+    return 'service';
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -287,6 +897,16 @@ const MyBookings = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">My Bookings</h1>
           <p className="mt-2 text-gray-600">Manage your tour bookings and custom trips</p>
+          
+          {/* Debug Authentication Status */}
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <h3 className="text-sm font-medium text-yellow-800">Debug Authentication Status:</h3>
+            <p className="text-xs text-yellow-700">Is Authenticated: {isAuthenticated ? 'Yes' : 'No'}</p>
+            <p className="text-xs text-yellow-700">Token Present: {token ? 'Yes' : 'No'}</p>
+            <p className="text-xs text-yellow-700">User: {user ? `${user.firstName} ${user.lastName}` : 'None'}</p>
+            <p className="text-xs text-yellow-700">Token Length: {token ? token.length : 'N/A'}</p>
+            <p className="text-xs text-yellow-700">LocalStorage Token: {localStorage.getItem('token') ? 'Present' : 'Missing'}</p>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -423,6 +1043,21 @@ const MyBookings = () => {
                           <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                             View Details
                           </button>
+                          {(booking.bookingStatus === 'completed' || (booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'paid')) && isAuthenticated && !reviewedBookings.has(booking._id || booking.id || booking.bookingId) && (
+                            <button 
+                              onClick={() => handleWriteReviewPopup({...booking, type: 'hotel'})}
+                              className="px-4 py-2 text-sm font-medium text-white bg-orange-500 border border-transparent rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                            >
+                              <MessageSquare className="h-4 w-4 mr-2" />
+                              Write Review
+                            </button>
+                          )}
+                          {(booking.bookingStatus === 'completed' || (booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'paid')) && isAuthenticated && reviewedBookings.has(booking._id || booking.id || booking.bookingId) && (
+                            <div className="px-4 py-2 text-sm font-medium text-green-600 bg-green-100 border border-green-200 rounded-md">
+                              <MessageSquare className="h-4 w-4 mr-2 inline" />
+                              Review Submitted
+                            </div>
+                          )}
                           {booking.status === 'pending' && (
                             <button className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                               Cancel
@@ -523,6 +1158,21 @@ const MyBookings = () => {
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </button>
+                          {(trip.status === 'completed' || (trip.status === 'confirmed' && trip.paymentStatus === 'paid')) && isAuthenticated && !reviewedBookings.has(trip._id || trip.id || trip.bookingId) && (
+                            <button 
+                              onClick={() => handleWriteReviewPopup({...trip, type: 'custom'})}
+                              className="px-4 py-2 text-sm font-medium text-white bg-orange-500 border border-transparent rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                            >
+                              <MessageSquare className="h-4 w-4 mr-2" />
+                              Write Review
+                            </button>
+                          )}
+                          {(trip.status === 'completed' || (trip.status === 'confirmed' && trip.paymentStatus === 'paid')) && isAuthenticated && reviewedBookings.has(trip._id || trip.id || trip.bookingId) && (
+                            <div className="px-4 py-2 text-sm font-medium text-green-600 bg-green-100 border border-green-200 rounded-md">
+                              <MessageSquare className="h-4 w-4 mr-2 inline" />
+                              Review Submitted
+                            </div>
+                          )}
                           {trip.status === 'approved' && (
                             <button 
                               onClick={() => handleConfirmCustomTrip(trip)}
@@ -621,6 +1271,21 @@ const MyBookings = () => {
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </button>
+                          {(booking.bookingStatus === 'completed' || (booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'paid')) && isAuthenticated && !reviewedBookings.has(booking._id || booking.id || booking.bookingId) && (
+                            <button 
+                              onClick={() => handleWriteReviewPopup({...booking, type: 'vehicle'})}
+                              className="px-4 py-2 text-sm font-medium text-white bg-orange-500 border border-transparent rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                            >
+                              <MessageSquare className="h-4 w-4 mr-2" />
+                              Write Review
+                            </button>
+                          )}
+                          {(booking.bookingStatus === 'completed' || (booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'paid')) && isAuthenticated && reviewedBookings.has(booking._id || booking.id || booking.bookingId) && (
+                            <div className="px-4 py-2 text-sm font-medium text-green-600 bg-green-100 border border-green-200 rounded-md">
+                              <MessageSquare className="h-4 w-4 mr-2 inline" />
+                              Review Submitted
+                            </div>
+                          )}
                           {booking.bookingStatus === 'pending' && (
                             <button className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                               Cancel
@@ -719,14 +1384,20 @@ const MyBookings = () => {
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </button>
-                          {booking.status === 'completed' && (
+                          {(booking.status === 'completed' || (booking.status === 'confirmed' && booking.paymentStatus === 'paid')) && isAuthenticated && !reviewedBookings.has(booking._id || booking.id || booking.bookingId) && (
                             <button 
-                              onClick={() => handleWriteReview(booking)}
-                              className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                              onClick={() => handleWriteReviewPopup({...booking, type: 'guide'})}
+                              className="px-4 py-2 text-sm font-medium text-white bg-orange-500 border border-transparent rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
                             >
                               <MessageSquare className="h-4 w-4 mr-2" />
                               Write Review
                             </button>
+                          )}
+                          {(booking.status === 'completed' || (booking.status === 'confirmed' && booking.paymentStatus === 'paid')) && isAuthenticated && reviewedBookings.has(booking._id || booking.id || booking.bookingId) && (
+                            <div className="px-4 py-2 text-sm font-medium text-green-600 bg-green-100 border border-green-200 rounded-md">
+                              <MessageSquare className="h-4 w-4 mr-2 inline" />
+                              Review Submitted
+                            </div>
                           )}
                           {booking.status === 'pending' && (
                             <button className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
@@ -1473,6 +2144,36 @@ const MyBookings = () => {
           </div>
         </div>
       )}
+
+      {/* New Review Popup */}
+      <ReviewPopup
+        isOpen={showReviewPopup}
+        onClose={() => {
+          setShowReviewPopup(false);
+          setSelectedBookingForPopup(null);
+          setExistingReviews([]);
+          setReviewStats(null);
+        }}
+        onSubmit={handleReviewPopupSubmit}
+        onEditReview={handleEditReview}
+        onDeleteReview={handleDeleteReview}
+        title={`Review ${selectedBookingForPopup ? getEntityName(selectedBookingForPopup) : 'Service'}`}
+        entityType={selectedBookingForPopup ? getEntityType(selectedBookingForPopup) : 'service'}
+        entityName={selectedBookingForPopup ? getEntityName(selectedBookingForPopup) : ''}
+        existingReviews={Array.isArray(existingReviews) ? existingReviews : []}
+        reviewStats={reviewStats}
+        userInfo={user}
+      />
+      <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <h3 className="text-sm font-medium text-yellow-800">Debug Authentication Status:</h3>
+        <p className="text-xs text-yellow-700">Is Authenticated: {isAuthenticated ? 'Yes' : 'No'}</p>
+        <p className="text-xs text-yellow-700">Token Present: {token ? 'Yes' : 'No'}</p>
+        <p className="text-xs text-yellow-700">User: {user ? `${user.firstName} ${user.lastName}` : 'None'}</p>
+        <p className="text-xs text-yellow-700">User ID: {user?._id || user?.id || 'None'}</p>
+        <p className="text-xs text-yellow-700">User ID Type: {typeof (user?._id || user?.id)}</p>
+        <p className="text-xs text-yellow-700">Token Length: {token ? token.length : 'N/A'}</p>
+        <p className="text-xs text-yellow-700">LocalStorage Token: {localStorage.getItem('token') ? 'Present' : 'Missing'}</p>
+      </div>
     </div>
   )
 }

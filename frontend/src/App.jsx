@@ -42,6 +42,7 @@ import CustomTrip from './pages/CustomTrip'
 import NotFound from './pages/NotFound'
 import Notifications from './pages/Notifications'
 import Contact from './pages/Contact'
+import TestReviewPopup from './pages/TestReviewPopup'
 
 // Admin Pages
 import AdminDashboard from './pages/admin/dashboard/AdminDashboard'
@@ -266,6 +267,9 @@ function App() {
                 
                 {/* Contact/Support */}
                 <Route path="contact" element={<Contact />} />
+                
+                {/* Test Review Popup */}
+                <Route path="test-review" element={<TestReviewPopup />} />
                 
                 {/* Booking Flow */}
                 <Route path="booking/:tourId" element={

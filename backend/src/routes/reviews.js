@@ -7,12 +7,15 @@ const {
   updateReview,
   deleteReview,
   markReviewHelpful,
-  getUserReviews
+  getUserReviews,
+  getGuideReviewStats,
+  checkUserReview
 } = require('../controllers/reviewController');
 const { protect } = require('../middleware/auth');
 
 // Public routes
 router.get('/guide/:guideId', getGuideReviews);
+router.get('/guide/:guideId/stats', getGuideReviewStats);
 router.get('/tour/:tourId', getTourReviews);
 
 // Protected routes
@@ -23,6 +26,7 @@ router.put('/:id', updateReview);
 router.delete('/:id', deleteReview);
 router.post('/:id/helpful', markReviewHelpful);
 router.get('/user/:userId', getUserReviews);
+router.get('/check', checkUserReview);
 
 module.exports = router;
 
