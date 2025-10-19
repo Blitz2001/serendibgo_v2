@@ -133,6 +133,12 @@ const CustomTripApprovalForm = () => {
     isCustom: true
   })
 
+  // Helper function to get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date()
+    return today.toISOString().split('T')[0]
+  }
+
   // Load available resources and trip data from database
   useEffect(() => {
     fetchAvailableResources()
@@ -164,15 +170,41 @@ const CustomTripApprovalForm = () => {
         setAvailableVehicles(vehiclesData.data)
       }
 
-      // Fetch hotels
-      const hotelsResponse = await fetch('/api/hotels', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+      // Fetch hotels - try staff API first, then fallback to public API
+      let hotelsData = null
+      try {
+        const hotelsResponse = await fetch('/api/staff/hotels', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        })
+        hotelsData = await hotelsResponse.json()
+        console.log('Staff Hotels API response:', hotelsData)
+      } catch (staffError) {
+        console.log('Staff hotels API failed, trying public API:', staffError)
+        try {
+          const hotelsResponse = await fetch('/api/hotels', {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          })
+          hotelsData = await hotelsResponse.json()
+          console.log('Public Hotels API response:', hotelsData)
+        } catch (publicError) {
+          console.error('Both hotels APIs failed:', publicError)
         }
-      })
-      const hotelsData = await hotelsResponse.json()
-      if (hotelsData.success) {
-        setAvailableHotels(hotelsData.data)
+      }
+      
+      if (hotelsData?.success) {
+        console.log('Fetched hotels:', hotelsData.data.hotels)
+        console.log('First hotel room types:', hotelsData.data.hotels[0]?.roomTypes)
+        setAvailableHotels(hotelsData.data.hotels)
+      } else if (hotelsData?.status === 'success') {
+        console.log('Fetched hotels:', hotelsData.data.hotels)
+        console.log('First hotel room types:', hotelsData.data.hotels[0]?.roomTypes)
+        setAvailableHotels(hotelsData.data.hotels)
+      } else {
+        console.error('Hotels API error:', hotelsData?.message || 'No hotels data received')
       }
     } catch (error) {
       console.error('Error fetching resources:', error)
@@ -1345,8 +1377,8 @@ const CustomTripApprovalForm = () => {
                         </label>
                         <input
                           type="text"
-                          value={vehicle.type}
-                          onChange={(e) => updateVehicle(index, 'type', e.target.value)}
+                          value={vehicle.vehicleType}
+                          onChange={(e) => updateVehicle(index, 'vehicleType', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                           placeholder="Car, Van, Bus"
                         />
@@ -1438,8 +1470,8 @@ const CustomTripApprovalForm = () => {
                                     i === index ? { 
                                       ...vehicle, 
                                       vehicleId: selectedVehicle._id,
-                                      vehicleType: selectedVehicle.type,
-                                      dailyRate: selectedVehicle.pricePerDay,
+                                      vehicleType: selectedVehicle.vehicleType,
+                                      dailyRate: selectedVehicle.pricing?.dailyRate || 0,
                                       driver: selectedVehicle.driver?._id || null // Send ObjectId instead of name
                                     } : vehicle
                                   )
@@ -1454,10 +1486,10 @@ const CustomTripApprovalForm = () => {
                                 // Try different possible date field names
                                 const addVehicleBudgetTripDuration = calculateTripDuration(tripData)
                                 
-                                console.log('Trip duration calculated:', tripDuration, 'days')
+                                console.log('Trip duration calculated:', addVehicleBudgetTripDuration, 'days')
                                 
                                 const guideFees = updated.assignedGuide ? 
-                                  (availableGuides.find(g => g.id === updated.assignedGuide)?.price || 0) * tripDuration : 0
+                                  (availableGuides.find(g => g.id === updated.assignedGuide)?.price || 0) * addVehicleBudgetTripDuration : 0
                                 
                                 const vehicleCosts = updated.assignedVehicles.reduce((total, vehicle) => {
                                   const cost = vehicle.dailyRate * vehicle.totalDays
@@ -1493,7 +1525,7 @@ const CustomTripApprovalForm = () => {
                           <option key="vehicle-empty" value="">Select vehicle...</option>
                           {availableVehicles.map(v => (
                             <option key={v._id} value={v._id}>
-                              {v.make} {v.model} ({v.type}) - LKR {v.pricePerDay}/day
+                              {v.make} {v.model} ({v.vehicleType}) - LKR {v.pricing?.dailyRate || 0}/day
                             </option>
                           ))}
                         </select>
@@ -1791,6 +1823,7 @@ const CustomTripApprovalForm = () => {
                           type="date"
                           value={booking.checkInDate}
                           onChange={(e) => updateHotelBooking(index, 'checkInDate', e.target.value)}
+                          min={getTodayDate()}
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                         />
                       </div>
@@ -1808,6 +1841,7 @@ const CustomTripApprovalForm = () => {
                               updateHotelBooking(index, 'nights', nights)
                             }
                           }}
+                          min={booking.checkInDate || getTodayDate()}
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                         />
                       </div>
@@ -1851,7 +1885,7 @@ const CustomTripApprovalForm = () => {
                             updateHotelBooking(index, 'hotel', e.target.value)
                             const selectedHotel = availableHotels.find(h => h._id === e.target.value)
                             if (selectedHotel) {
-                              updateHotelBooking(index, 'pricePerNight', selectedHotel.roomTypes?.[0]?.price || 0)
+                              updateHotelBooking(index, 'pricePerNight', selectedHotel.roomTypes?.[0]?.basePrice || selectedHotel.averageRoomPrice || 0)
                               updateHotelBooking(index, 'city', selectedHotel.location?.city || '')
                               updateHotelBooking(index, 'name', selectedHotel.name)
                               updateHotelBooking(index, 'starRating', selectedHotel.starRating)
@@ -1861,11 +1895,12 @@ const CustomTripApprovalForm = () => {
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                         >
                           <option key="hotel-empty" value="">Select hotel...</option>
+                          {console.log('Available hotels for dropdown:', availableHotels)}
                           {availableHotels
                             .filter(hotel => !hotelCityFilter || hotel.location?.city === hotelCityFilter)
                             .map(hotel => (
                             <option key={hotel._id} value={hotel._id}>
-                              {hotel.name} - {hotel.location?.city} ({hotel.starRating}★) - LKR {hotel.roomTypes?.[0]?.price || 0}/night
+                              {hotel.name} - {hotel.location?.city} ({hotel.starRating}★) - LKR {hotel.roomTypes?.[0]?.basePrice || hotel.averageRoomPrice || 0}/night
                             </option>
                           ))}
                         </select>
@@ -1877,15 +1912,43 @@ const CustomTripApprovalForm = () => {
                         </label>
                         <select
                           value={booking.roomType}
-                          onChange={(e) => updateHotelBooking(index, 'roomType', e.target.value)}
+                          onChange={(e) => {
+                            updateHotelBooking(index, 'roomType', e.target.value)
+                            // Update price based on selected room type
+                            if (booking.hotel) {
+                              const selectedHotel = availableHotels.find(h => h._id === booking.hotel)
+                              const selectedRoomType = selectedHotel?.roomTypes?.find(rt => rt.name === e.target.value)
+                              if (selectedRoomType) {
+                                updateHotelBooking(index, 'pricePerNight', selectedRoomType.basePrice)
+                              }
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                         >
                           <option key="room-empty" value="">Select room type...</option>
-                          <option key="single" value="single">Single Room</option>
-                          <option key="double" value="double">Double Room</option>
-                          <option key="twin" value="twin">Twin Room</option>
-                          <option key="family" value="family">Family Room</option>
-                          <option key="suite" value="suite">Suite</option>
+                          {(() => {
+                            const selectedHotel = availableHotels.find(h => h._id === booking.hotel)
+                            console.log('Selected hotel for room types:', booking.hotel, selectedHotel)
+                            console.log('Selected hotel room types:', selectedHotel?.roomTypes)
+                            
+                            if (selectedHotel?.roomTypes && selectedHotel.roomTypes.length > 0) {
+                              return selectedHotel.roomTypes.map((roomType, roomIndex) => (
+                                <option key={`${roomIndex}-${roomType.name}`} value={roomType.name}>
+                                  {roomType.name} - LKR {roomType.basePrice}/night
+                                </option>
+                              ))
+                            } else {
+                              return (
+                                <>
+                                  <option key="single" value="single">Single Room</option>
+                                  <option key="double" value="double">Double Room</option>
+                                  <option key="twin" value="twin">Twin Room</option>
+                                  <option key="family" value="family">Family Room</option>
+                                  <option key="suite" value="suite">Suite</option>
+                                </>
+                              )
+                            }
+                          })()}
                         </select>
                       </div>
                       
@@ -1897,6 +1960,7 @@ const CustomTripApprovalForm = () => {
                           type="date"
                           value={booking.checkInDate}
                           onChange={(e) => updateHotelBooking(index, 'checkInDate', e.target.value)}
+                          min={getTodayDate()}
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                         />
                       </div>
@@ -1915,6 +1979,7 @@ const CustomTripApprovalForm = () => {
                               updateHotelBooking(index, 'nights', nights)
                             }
                           }}
+                          min={booking.checkInDate || getTodayDate()}
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                         />
                       </div>
@@ -2047,6 +2112,7 @@ const CustomTripApprovalForm = () => {
                         type="date"
                         value={manualHotel.checkInDate}
                         onChange={(e) => setManualHotel(prev => ({ ...prev, checkInDate: e.target.value }))}
+                        min={getTodayDate()}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
@@ -2056,6 +2122,7 @@ const CustomTripApprovalForm = () => {
                         type="date"
                         value={manualHotel.checkOutDate}
                         onChange={(e) => setManualHotel(prev => ({ ...prev, checkOutDate: e.target.value }))}
+                        min={manualHotel.checkInDate || getTodayDate()}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>

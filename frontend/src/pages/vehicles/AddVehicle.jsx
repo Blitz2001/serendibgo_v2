@@ -174,7 +174,8 @@ const AddVehicle = () => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const newImage = {
-          url: e.target.result,
+          url: e.target.result, // Preview URL for display
+          file: file, // Actual File object for upload
           caption: '',
           isPrimary: formData.images.length === 0,
           category: 'exterior',

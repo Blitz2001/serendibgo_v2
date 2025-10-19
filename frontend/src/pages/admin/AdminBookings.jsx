@@ -127,10 +127,30 @@ const AdminBookings = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-base-100 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      <div className="min-h-screen bg-base-100">
+        {/* Fixed Header */}
+        <div className="bg-white border-b border-gray-200 shadow-sm fixed top-0 left-0 right-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div className="flex items-center space-x-4">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
+                  <Bed className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">Manage Bookings</h1>
+                  <p className="text-sm text-gray-600">View and manage all hotel bookings</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="pt-16 pb-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -139,19 +159,39 @@ const AdminBookings = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-base-100 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center py-12">
-            <AlertCircle className="mx-auto h-12 w-12 text-error" />
-            <h3 className="mt-2 text-sm font-medium text-base-content">Error loading bookings</h3>
-            <p className="mt-1 text-sm text-base-content/70">{error}</p>
-            <div className="mt-6">
-              <button
-                onClick={fetchAllBookings}
-                className="btn btn-primary"
-              >
-                Try Again
-              </button>
+      <div className="min-h-screen bg-base-100">
+        {/* Fixed Header */}
+        <div className="bg-white border-b border-gray-200 shadow-sm fixed top-0 left-0 right-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div className="flex items-center space-x-4">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
+                  <Bed className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">Manage Bookings</h1>
+                  <p className="text-sm text-gray-600">View and manage all hotel bookings</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="pt-16 pb-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center py-12">
+              <AlertCircle className="mx-auto h-12 w-12 text-error" />
+              <h3 className="mt-2 text-sm font-medium text-base-content">Error loading bookings</h3>
+              <p className="mt-1 text-sm text-base-content/70">{error}</p>
+              <div className="mt-6">
+                <button
+                  onClick={fetchAllBookings}
+                  className="btn btn-primary"
+                >
+                  Try Again
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -160,17 +200,35 @@ const AdminBookings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-base-100 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-base-content mb-4">
-            Manage Bookings
-          </h1>
-          <p className="text-xl text-base-content/70">
-            View and manage all hotel bookings
-          </p>
+    <div className="min-h-screen bg-base-100">
+      {/* Fixed Header */}
+      <div className="bg-white border-b border-gray-200 shadow-sm fixed top-0 left-0 right-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
+                <Bed className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Manage Bookings</h1>
+                <p className="text-sm text-gray-600">View and manage all hotel bookings</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => window.history.back()}
+                className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="pt-16 pb-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Filters */}
         <div className="bg-base-200 rounded-lg p-6 mb-6">
@@ -367,6 +425,7 @@ const AdminBookings = () => {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   )

@@ -621,8 +621,13 @@ const rejectCustomTrip = async (req, res) => {
 // @access  Private
 const confirmCustomTrip = async (req, res) => {
   try {
+    console.log('=== CONFIRM CUSTOM TRIP DEBUG ===');
+    console.log('Trip ID:', req.params.id);
+    console.log('User ID:', req.user?._id);
+    
     // Validate ObjectId format
     if (!validateObjectId(req.params.id)) {
+      console.log('Invalid ObjectId format');
       return res.status(400).json({
         success: false,
         message: 'Invalid trip ID format'
@@ -631,21 +636,34 @@ const confirmCustomTrip = async (req, res) => {
 
     const customTrip = await CustomTrip.findById(req.params.id);
     if (!customTrip) {
+      console.log('Custom trip not found');
       return res.status(404).json({
         success: false,
         message: 'Custom trip not found'
       });
     }
 
+    console.log('Custom trip found:', {
+      id: customTrip._id,
+      status: customTrip.status,
+      paymentStatus: customTrip.paymentStatus,
+      customer: customTrip.customer
+    });
+
     // Check if user owns this custom trip
     if (customTrip.customer.toString() !== req.user._id.toString()) {
+      console.log('Access denied - user does not own this trip');
       return res.status(403).json({
         success: false,
         message: 'Access denied'
       });
     }
 
+    console.log('Checking if trip can be confirmed...');
+    console.log('canBeConfirmed result:', customTrip.canBeConfirmed());
+    
     if (!customTrip.canBeConfirmed()) {
+      console.log('Trip cannot be confirmed in current status');
       return res.status(400).json({
         success: false,
         message: 'Custom trip cannot be confirmed in current status'

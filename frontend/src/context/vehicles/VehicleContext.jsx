@@ -204,9 +204,14 @@ export const VehicleProvider = ({ children }) => {
         Object.keys(vehicleData).forEach(key => {
           if (key === 'images' && Array.isArray(vehicleData[key])) {
             vehicleData[key].forEach((image, index) => {
-              if (image instanceof File) {
+              if (image.file instanceof File) {
+                // Send the actual File object
+                formData.append(`images[${index}]`, image.file);
+              } else if (image instanceof File) {
+                // Fallback for direct File objects
                 formData.append(`images[${index}]`, image);
               } else {
+                // Fallback for URL strings (backward compatibility)
                 formData.append(`images[${index}]`, JSON.stringify(image));
               }
             });

@@ -17,6 +17,15 @@ const staffAuth = async (req, res, next) => {
       token = req.cookies.token;
     }
 
+    console.log('Staff Auth Debug:', {
+      hasAuthHeader: !!req.headers.authorization,
+      authHeader: req.headers.authorization,
+      hasToken: !!token,
+      tokenLength: token ? token.length : 0,
+      url: req.originalUrl,
+      method: req.method
+    });
+
     if (!token) {
       return res.status(401).json({
         status: 'error',
@@ -27,9 +36,11 @@ const staffAuth = async (req, res, next) => {
     try {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log('Token decoded successfully:', { id: decoded.id, iat: decoded.iat });
       
       // Get user from token
       const user = await User.findById(decoded.id).select('-password');
+      console.log('User found:', user ? { id: user._id, role: user.role, isActive: user.isActive } : 'Not found');
       
       if (!user) {
         return res.status(401).json({
@@ -49,6 +60,7 @@ const staffAuth = async (req, res, next) => {
       // Check if user is staff member
       const staffRoles = ['staff', 'admin', 'super_admin', 'manager', 'support_staff'];
       if (!staffRoles.includes(user.role)) {
+        console.log('User role not in staff roles:', { userRole: user.role, staffRoles });
         return res.status(403).json({
           status: 'error',
           message: 'Access denied. Staff access required.'
@@ -71,8 +83,10 @@ const staffAuth = async (req, res, next) => {
         permissions: user.profile?.permissions || []
       };
 
+      console.log('Staff auth successful:', { userId: user._id, role: user.role });
       next();
     } catch (error) {
+      console.error('Token verification failed:', error.message);
       return res.status(401).json({
         status: 'error',
         message: 'Invalid token'

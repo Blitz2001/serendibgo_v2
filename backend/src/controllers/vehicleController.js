@@ -1,5 +1,6 @@
 const Vehicle = require('../models/Vehicle');
 const User = require('../models/User');
+const { saveMemoryFilesToDisk } = require('../utils/fileUpload');
 
 // @desc    Get all vehicles
 // @route   GET /api/vehicles
@@ -128,13 +129,40 @@ const createVehicle = async (req, res) => {
       notes
     } = req.body;
 
-    // Check if driver exists and has driver role
-    const driverUser = await User.findById(driver);
-    if (!driverUser || driverUser.role !== 'driver') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid driver. Driver must exist and have driver role.'
-      });
+    // Process uploaded images
+    let processedImages = [];
+    
+    // Handle uploaded files from req.files
+    if (req.files && req.files.images && req.files.images.length > 0) {
+      console.log('Processing uploaded image files:', req.files.images.length);
+      const savedFiles = await saveMemoryFilesToDisk(req.files.images);
+      processedImages = savedFiles.map((file, index) => ({
+        url: file.url,
+        caption: file.originalName,
+        isPrimary: index === 0 // First image is primary
+      }));
+    }
+    // Fallback to parsed images from request body
+    else if (images && Array.isArray(images)) {
+      console.log('Processing images from request body:', images.length);
+      processedImages = images.map((image, index) => ({
+        url: typeof image === 'string' ? image : image.url,
+        caption: image.caption || '',
+        isPrimary: index === 0 // First image is primary
+      }));
+    }
+
+    console.log('Processed images:', processedImages);
+
+    // Check if driver exists and has driver role (if driver is specified)
+    if (driver) {
+      const driverUser = await User.findById(driver);
+      if (!driverUser || driverUser.role !== 'driver') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid driver. Driver must exist and have driver role.'
+        });
+      }
     }
 
     const vehicle = new Vehicle({
@@ -146,13 +174,15 @@ const createVehicle = async (req, res) => {
       capacity,
       features,
       pricing,
-      driver,
+      driver: driver || req.user.id, // Use current user if no driver specified
       location,
-      images,
+      images: processedImages,
       insurance,
       registration,
       description,
-      notes
+      notes,
+      owner: req.user.id, // Set owner to current user
+      status: 'pending' // Set to pending initially
     });
 
     await vehicle.save();

@@ -255,48 +255,35 @@ const HotelManagement = () => {
     }
   };
 
-  // Handle create/update hotel
-  const handleSaveHotel = async () => {
-    try {
-      if (selectedHotel) {
-        await staffService.updateHotel(selectedHotel._id, newHotel);
-        toast.success('Hotel updated successfully');
-      } else {
-        await staffService.createHotel(newHotel);
-        toast.success('Hotel created successfully');
+  // Handle edit hotel
+  const handleEditHotel = async (hotel) => {
+    setSelectedHotel(hotel);
+    setNewHotel({
+      name: hotel.name || '',
+      description: hotel.description || '',
+      location: hotel.location?.city || hotel.location?.address || '',
+      address: hotel.address || '',
+      phone: hotel.contact?.phone || '',
+      email: hotel.email || '',
+      website: hotel.website || '',
+      rating: hotel.ratings?.overall || 0,
+      priceRange: getPriceRange(hotel),
+      amenities: Object.keys(hotel.amenities || {}).filter(amenity => hotel.amenities[amenity]),
+      images: hotel.images || [],
+      rooms: hotel.rooms || [],
+      policies: hotel.policies || {
+        checkIn: '',
+        checkOut: '',
+        cancellation: '',
+        pets: false,
+        smoking: false
+      },
+      coordinates: hotel.coordinates || {
+        latitude: 0,
+        longitude: 0
       }
-      fetchHotels();
-      setShowCreateModal(false);
-      setShowEditModal(false);
-      setNewHotel({
-        name: '',
-        description: '',
-        location: '',
-        address: '',
-        phone: '',
-        email: '',
-        website: '',
-        rating: 0,
-        priceRange: 'budget',
-        amenities: [],
-        images: [],
-        rooms: [],
-        policies: {
-          checkIn: '',
-          checkOut: '',
-          cancellation: '',
-          pets: false,
-          smoking: false
-        },
-        coordinates: {
-          latitude: 0,
-          longitude: 0
-        }
-      });
-    } catch (error) {
-      console.error('Save hotel error:', error);
-      toast.error(error.message || 'Failed to save hotel');
-    }
+    });
+    setShowCreateModal(true);
   };
 
   // Handle bulk operations
@@ -429,6 +416,7 @@ const HotelManagement = () => {
           >
             <Filter className="h-4 w-4 mr-2" />
             Filters
+            <ChevronDown className="h-4 w-4 ml-1" />
           </button>
         </div>
       </div>
@@ -638,133 +626,131 @@ const HotelManagement = () => {
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4 p-6">
             {hotels.map((hotel) => {
               const StatusIcon = getStatusIcon(hotel.status);
               return (
                 <div key={hotel._id} className="bg-white border border-slate-200 rounded-xl p-6 hover:shadow-md transition-all duration-200 hover:border-slate-300">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-4 flex-1">
-                      <input
-                        type="checkbox"
-                        checked={selectedHotels.includes(hotel._id)}
-                        onChange={() => handleSelectHotel(hotel._id)}
-                        className="h-4 w-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 mt-1"
-                      />
+                  <div className="flex items-start space-x-4">
+                    {/* Checkbox */}
+                    <input
+                      type="checkbox"
+                      checked={selectedHotels.includes(hotel._id)}
+                      onChange={() => handleSelectHotel(hotel._id)}
+                      className="h-4 w-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 mt-1"
+                    />
+                    
+                    {/* Hotel Image */}
+                    <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 rounded-lg overflow-hidden shadow-sm flex-shrink-0">
+                      {hotel.images && hotel.images.length > 0 ? (
+                        <img
+                          src={hotel.images[0]?.url || hotel.images[0]}
+                          alt={hotel.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Building className="h-6 w-6 text-slate-400" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Hotel Content */}
+                    <div className="flex-1 min-w-0">
+                      {/* Hotel Name and Status */}
+                      <div className="flex items-center space-x-3 mb-2">
+                        <h4 className="text-lg font-bold text-slate-900">{hotel.name}</h4>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(hotel.status)}`}>
+                          <StatusIcon className="h-3 w-3 mr-1" />
+                          {hotel.status}
+                        </span>
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                          N/A
+                        </span>
+                      </div>
                       
-                      <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl overflow-hidden shadow-sm">
-                        {hotel.images && hotel.images.length > 0 ? (
-                          <img
-                            src={hotel.images[0]?.url || hotel.images[0]}
-                            alt={hotel.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Building className="h-8 w-8 text-slate-400" />
-                          </div>
-                        )}
+                      {/* Description */}
+                      <p className="text-slate-600 mb-3 text-sm leading-relaxed">
+                        {hotel.description || 'No description provided'}
+                      </p>
+                      
+                      {/* Hotel Details */}
+                      <div className="flex items-center space-x-6 mb-3 text-sm text-slate-600">
+                        <div className="flex items-center space-x-1">
+                          <MapPin className="h-4 w-4 text-slate-400" />
+                          <span>{hotel.location?.city || hotel.location?.address || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Star className="h-4 w-4 text-slate-400" />
+                          <span>{hotel.ratings?.overall || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Bed className="h-4 w-4 text-slate-400" />
+                          <span>{hotel.rooms?.length || 0} rooms</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Phone className="h-4 w-4 text-slate-400" />
+                          <span>{hotel.contact?.phone || 'N/A'}</span>
+                        </div>
                       </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-3 mb-3">
-                          <h4 className="text-xl font-bold text-slate-900 truncate">{hotel.name}</h4>
-                          <div className="flex items-center space-x-2">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(hotel.status)}`}>
-                              <StatusIcon className="h-3 w-3 mr-1" />
-                              {hotel.status}
-                            </span>
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getPriceRangeColor(getPriceRange(hotel))}`}>
-                              {getPriceRange(hotel)}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        <p className="text-slate-600 mb-4 line-clamp-2 text-sm leading-relaxed">{hotel.description}</p>
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                          <div className="flex items-center space-x-2 text-slate-600">
-                            <MapPin className="h-4 w-4 text-slate-400" />
-                            <span className="text-sm font-medium">{hotel.location?.city || hotel.location?.address || 'N/A'}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-slate-600">
-                            <Star className="h-4 w-4 text-slate-400" />
-                            <span className="text-sm font-medium">{hotel.ratings?.overall || 'N/A'}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-slate-600">
-                            <Bed className="h-4 w-4 text-slate-400" />
-                            <span className="text-sm font-medium">{hotel.rooms?.length || 0} rooms</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-slate-600">
-                            <Phone className="h-4 w-4 text-slate-400" />
-                            <span className="text-sm font-medium">{hotel.contact?.phone || 'N/A'}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          {(() => {
-                            const activeAmenities = Object.keys(hotel.amenities || {}).filter(amenity => hotel.amenities[amenity]);
-                            return activeAmenities.slice(0, 6).map((amenity, index) => {
-                              const AmenityIcon = getAmenityIcon(amenity);
-                              return (
-                                <span key={index} className="flex items-center px-3 py-1 bg-blue-50 text-blue-700 text-xs rounded-full font-medium">
-                                  <AmenityIcon className="h-3 w-3 mr-1" />
-                                  {amenity}
-                                </span>
-                              );
-                            });
-                          })()}
-                          {(() => {
-                            const activeAmenities = Object.keys(hotel.amenities || {}).filter(amenity => hotel.amenities[amenity]);
-                            return activeAmenities.length > 6 && (
-                              <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs rounded-full font-medium">
-                                +{activeAmenities.length - 6} more
+                      {/* Amenities */}
+                      <div className="flex flex-wrap gap-2">
+                        {(() => {
+                          const activeAmenities = Object.keys(hotel.amenities || {}).filter(amenity => hotel.amenities[amenity]);
+                          return activeAmenities.slice(0, 6).map((amenity, index) => {
+                            const AmenityIcon = getAmenityIcon(amenity);
+                            return (
+                              <span key={index} className="flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
+                                <AmenityIcon className="h-3 w-3 mr-1" />
+                                {amenity}
                               </span>
                             );
-                          })()}
-                        </div>
+                          });
+                        })()}
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 ml-4">
+                    {/* Action Buttons */}
+                    <div className="flex flex-col items-end space-y-2">
                       <button
                         onClick={() => handleViewDetails(hotel)}
-                        className="flex items-center px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                        className="flex items-center px-3 py-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors text-sm"
                       >
-                        <Eye className="h-4 w-4 mr-2" />
+                        <Eye className="h-4 w-4 mr-1" />
                         View Details
                       </button>
                       
                       {/* Show approve/reject buttons for pending hotels */}
                       {hotel.status === 'pending' && (
-                        <>
+                        <div className="flex flex-col space-y-2">
                           <button
                             onClick={() => handleApproveHotel(hotel._id)}
-                            className="flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors font-medium"
+                            className="flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors font-medium text-sm"
                           >
                             <CheckCircle className="h-4 w-4 mr-2" />
                             Approve Hotel
                           </button>
                           <button
                             onClick={() => handleRejectHotel(hotel._id)}
-                            className="flex items-center px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors font-medium"
+                            className="flex items-center px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors font-medium text-sm"
                           >
                             <X className="h-4 w-4 mr-2" />
                             Reject Hotel
                           </button>
-                        </>
+                        </div>
                       )}
                       
                       {/* Show status for approved/rejected hotels */}
                       {hotel.status === 'approved' && (
-                        <span className="flex items-center px-3 py-2 bg-green-100 text-green-800 rounded-lg font-medium">
+                        <span className="flex items-center px-3 py-2 bg-green-100 text-green-800 rounded-lg font-medium text-sm">
                           <CheckCircle className="h-4 w-4 mr-2" />
                           Approved
                         </span>
                       )}
                       
                       {hotel.status === 'rejected' && (
-                        <span className="flex items-center px-3 py-2 bg-red-100 text-red-800 rounded-lg font-medium">
+                        <span className="flex items-center px-3 py-2 bg-red-100 text-red-800 rounded-lg font-medium text-sm">
                           <X className="h-4 w-4 mr-2" />
                           Rejected
                         </span>

@@ -240,7 +240,7 @@ const VehicleBookingFlow = () => {
       
       const data = await response.json();
       if (data.status === 'success') {
-        const booking = data.data;
+        const booking = data.data.booking || data.data;
         const totalAmount = bookingData.pricing?.totalPrice || 0;
         
         // Navigate to payment page

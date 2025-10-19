@@ -63,9 +63,17 @@ const ReviewManagement = () => {
     
     try {
       const data = await staffService.getReviewStatistics();
+      console.log('Review statistics data:', data);
       setStatistics(data.data);
     } catch (error) {
       console.error('Fetch statistics error:', error);
+      // Set default values if API fails
+      setStatistics({
+        total: 0,
+        pending: 0,
+        flagged: 0,
+        averageRating: '0.0'
+      });
     }
   };
 

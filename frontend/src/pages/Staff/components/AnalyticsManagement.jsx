@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react'
+import api from '../../../services/api'
+import toast from 'react-hot-toast'
 import {
   BarChart3,
   TrendingUp,
@@ -31,7 +33,8 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
-  Info
+  Info,
+  FileText
 } from 'lucide-react'
 
 const AnalyticsManagement = () => {
@@ -41,58 +44,58 @@ const AnalyticsManagement = () => {
   const [expandedSections, setExpandedSections] = useState(new Set(['overview']))
   const [analytics, setAnalytics] = useState({
     overview: {
-      totalUsers: 1250,
-      totalBookings: 89,
-      totalRevenue: 125000,
-      averageRating: 4.2,
-      activeTours: 45,
-      activeGuides: 23,
-      activeHotels: 67,
-      activeVehicles: 34
+      totalUsers: 0,
+      totalBookings: 0,
+      totalRevenue: 0,
+      averageRating: 0,
+      activeTours: 0,
+      activeGuides: 0,
+      activeHotels: 0,
+      activeVehicles: 0
     },
     revenue: {
-      total: 125000,
-      monthly: 45000,
-      weekly: 12000,
-      daily: 1800,
-      growth: 12.5,
+      total: 0,
+      monthly: 0,
+      weekly: 0,
+      daily: 0,
+      growth: 0,
       breakdown: {
-        tours: 85000,
-        hotels: 25000,
-        vehicles: 15000
+        tours: 0,
+        hotels: 0,
+        vehicles: 0
       }
     },
     bookings: {
-      total: 89,
-      completed: 76,
-      pending: 8,
-      cancelled: 5,
-      growth: 8.3,
+      total: 0,
+      completed: 0,
+      pending: 0,
+      cancelled: 0,
+      growth: 0,
       byType: {
-        tours: 45,
-        hotels: 28,
-        vehicles: 16
+        tours: 0,
+        hotels: 0,
+        vehicles: 0
       }
     },
     users: {
-      total: 1250,
-      new: 45,
-      active: 234,
-      inactive: 971,
-      growth: 15.2,
+      total: 0,
+      new: 0,
+      active: 0,
+      inactive: 0,
+      growth: 0,
       byRole: {
-        customers: 1100,
-        guides: 120,
-        staff: 30
+        customers: 0,
+        guides: 0,
+        staff: 0
       }
     },
     performance: {
-      averageResponseTime: 2.4,
-      customerSatisfaction: 4.2,
-      bookingCompletionRate: 85.4,
-      guideRating: 4.6,
-      hotelRating: 4.1,
-      vehicleRating: 4.3
+      averageResponseTime: 0,
+      customerSatisfaction: 0,
+      bookingCompletionRate: 0,
+      guideRating: 0,
+      hotelRating: 0,
+      vehicleRating: 0
     }
   })
 
@@ -110,6 +113,88 @@ const AnalyticsManagement = () => {
     { value: 'users', label: 'Users', icon: Users },
     { value: 'performance', label: 'Performance', icon: Target }
   ]
+
+  // Fetch analytics data
+  const fetchAnalyticsData = async () => {
+    setLoading(true)
+    try {
+      const response = await api.get('/staff/analytics/overview', {
+        params: { period: selectedPeriod }
+      })
+
+      if (response.data.success) {
+        const data = response.data.data
+        
+        // Transform the data to match our component structure
+        setAnalytics({
+          overview: {
+            totalUsers: data.users?.total || 0,
+            totalBookings: data.bookings?.total || 0,
+            totalRevenue: data.bookings?.revenue || 0,
+            averageRating: data.performance?.customerSatisfaction || 0,
+            activeTours: data.bookings?.byStatus?.find(s => s._id === 'confirmed')?.count || 0,
+            activeGuides: data.users?.byRole?.find(r => r._id === 'guide')?.count || 0,
+            activeHotels: data.users?.byRole?.find(r => r._id === 'hotel_owner')?.count || 0,
+            activeVehicles: data.users?.byRole?.find(r => r._id === 'driver')?.count || 0
+          },
+          revenue: {
+            total: data.bookings?.revenue || 0,
+            monthly: data.bookings?.recentRevenue || 0,
+            weekly: Math.round((data.bookings?.recentRevenue || 0) / 4),
+            daily: Math.round((data.bookings?.recentRevenue || 0) / 30),
+            growth: data.growthRates?.revenue || 0,
+            breakdown: {
+              tours: data.bookings?.revenueBreakdown?.tours || 0,
+              hotels: data.bookings?.revenueBreakdown?.hotels || 0,
+              vehicles: data.bookings?.revenueBreakdown?.vehicles || 0
+            }
+          },
+          bookings: {
+            total: data.bookings?.total || 0,
+            completed: data.bookings?.byStatus?.find(s => s._id === 'completed')?.count || 0,
+            pending: data.bookings?.byStatus?.find(s => s._id === 'pending')?.count || 0,
+            cancelled: data.bookings?.byStatus?.find(s => s._id === 'cancelled')?.count || 0,
+            growth: data.growthRates?.bookings || 0,
+            byType: {
+              tours: Math.round((data.bookings?.total || 0) * 0.5),
+              hotels: Math.round((data.bookings?.total || 0) * 0.3),
+              vehicles: Math.round((data.bookings?.total || 0) * 0.2)
+            }
+          },
+          users: {
+            total: data.users?.total || 0,
+            new: data.users?.new || 0,
+            active: data.users?.active || 0,
+            inactive: (data.users?.total || 0) - (data.users?.active || 0),
+            growth: data.growthRates?.users || 0,
+            byRole: {
+              customers: data.users?.byRole?.find(r => r._id === 'tourist')?.count || 0,
+              guides: data.users?.byRole?.find(r => r._id === 'guide')?.count || 0,
+              staff: data.users?.byRole?.find(r => r._id === 'staff')?.count || 0
+            }
+          },
+          performance: {
+            averageResponseTime: data.performance?.averageBookingValue ? Math.round(data.performance.averageBookingValue / 1000) : 0,
+            customerSatisfaction: data.performance?.customerSatisfaction || 0,
+            bookingCompletionRate: data.bookings?.total > 0 ? Math.round(((data.bookings?.byStatus?.find(s => s._id === 'completed')?.count || 0) / data.bookings.total) * 100) : 0,
+            guideRating: 4.6, // Mock data - would get from reviews
+            hotelRating: 4.1, // Mock data - would get from reviews
+            vehicleRating: 4.3 // Mock data - would get from reviews
+          }
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching analytics data:', error)
+      toast.error('Failed to load analytics data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fetch data on component mount and when period changes
+  useEffect(() => {
+    fetchAnalyticsData()
+  }, [selectedPeriod])
 
   const toggleSection = (section) => {
     setExpandedSections(prev => {
@@ -135,6 +220,66 @@ const AnalyticsManagement = () => {
     return <Activity className="h-4 w-4" />
   }
 
+  // PDF Report generation
+  const handleGeneratePDFReport = async (reportType = 'analytics', period = '30d') => {
+    try {
+      toast.loading('Generating PDF report...', { id: 'pdf-report' });
+      
+      const response = await api.post('/staff/reports/generate', {
+        reportType,
+        period
+      });
+
+      if (response.data.success && response.data.data) {
+        console.log('Response data type:', typeof response.data.data);
+        console.log('Response data length:', response.data.data.length);
+        console.log('First 100 chars:', response.data.data.substring(0, 100));
+        
+        try {
+          // Convert base64 to blob using a more robust method
+          const base64Data = response.data.data;
+          
+          // Remove any whitespace or newlines
+          const cleanBase64 = base64Data.replace(/\s/g, '');
+          
+          // Convert base64 to binary string
+          const binaryString = atob(cleanBase64);
+          
+          // Convert binary string to Uint8Array
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          // Create blob
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          
+          console.log('Blob created successfully, size:', blob.size);
+          
+          // Create download link
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = response.data.filename || `staff-analytics-report-${new Date().toISOString().split('T')[0]}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+
+          toast.success('PDF report generated successfully!', { id: 'pdf-report' });
+        } catch (decodeError) {
+          console.error('Error decoding base64 data:', decodeError);
+          throw new Error('Failed to decode PDF data: ' + decodeError.message);
+        }
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error generating PDF report:', error);
+      toast.error('Failed to generate PDF report', { id: 'pdf-report' });
+    }
+  };
+
   const renderOverviewCards = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <div className="bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl p-6 text-white">
@@ -149,7 +294,7 @@ const AnalyticsManagement = () => {
         </div>
         <div className="flex items-center text-blue-100 text-sm">
           <TrendingUp className="h-4 w-4 mr-1" />
-          +15.2% from last month
+          +{analytics.users.growth}% from last month
         </div>
       </div>
 
@@ -165,7 +310,7 @@ const AnalyticsManagement = () => {
         </div>
         <div className="flex items-center text-green-100 text-sm">
           <TrendingUp className="h-4 w-4 mr-1" />
-          +8.3% from last month
+          +{analytics.bookings.growth}% from last month
         </div>
       </div>
 
@@ -181,7 +326,7 @@ const AnalyticsManagement = () => {
         </div>
         <div className="flex items-center text-purple-100 text-sm">
           <TrendingUp className="h-4 w-4 mr-1" />
-          +12.5% from last month
+          +{analytics.revenue.growth}% from last month
         </div>
       </div>
 
@@ -273,7 +418,7 @@ const AnalyticsManagement = () => {
             </div>
             <h4 className="font-semibold text-slate-900">Tours</h4>
             <p className="text-2xl font-bold text-blue-600">LKR {analytics.revenue.breakdown.tours.toLocaleString()}</p>
-            <p className="text-sm text-slate-600">68% of total revenue</p>
+            <p className="text-sm text-slate-600">{analytics.revenue.total > 0 ? Math.round((analytics.revenue.breakdown.tours / analytics.revenue.total) * 100) : 0}% of total revenue</p>
           </div>
           <div className="text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -281,7 +426,7 @@ const AnalyticsManagement = () => {
             </div>
             <h4 className="font-semibold text-slate-900">Hotels</h4>
             <p className="text-2xl font-bold text-green-600">LKR {analytics.revenue.breakdown.hotels.toLocaleString()}</p>
-            <p className="text-sm text-slate-600">20% of total revenue</p>
+            <p className="text-sm text-slate-600">{analytics.revenue.total > 0 ? Math.round((analytics.revenue.breakdown.hotels / analytics.revenue.total) * 100) : 0}% of total revenue</p>
           </div>
           <div className="text-center">
             <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -289,7 +434,7 @@ const AnalyticsManagement = () => {
             </div>
             <h4 className="font-semibold text-slate-900">Vehicles</h4>
             <p className="text-2xl font-bold text-purple-600">LKR {analytics.revenue.breakdown.vehicles.toLocaleString()}</p>
-            <p className="text-sm text-slate-600">12% of total revenue</p>
+            <p className="text-sm text-slate-600">{analytics.revenue.total > 0 ? Math.round((analytics.revenue.breakdown.vehicles / analytics.revenue.total) * 100) : 0}% of total revenue</p>
           </div>
         </div>
       </div>
@@ -571,12 +716,18 @@ const AnalyticsManagement = () => {
               <option key={period.value} value={period.value}>{period.label}</option>
             ))}
           </select>
-          <button className="flex items-center px-4 py-2 bg-slate-600 text-white rounded-xl hover:bg-slate-700 transition-colors">
-            <Download className="h-4 w-4 mr-2" />
+          <button 
+            onClick={() => handleGeneratePDFReport('analytics', selectedPeriod)}
+            className="flex items-center px-4 py-2 bg-slate-600 text-white rounded-xl hover:bg-slate-700 transition-colors"
+          >
+            <FileText className="h-4 w-4 mr-2" />
             Export
           </button>
-          <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors">
-            <RefreshCw className="h-4 w-4 mr-2" />
+          <button 
+            onClick={fetchAnalyticsData}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>
@@ -607,7 +758,16 @@ const AnalyticsManagement = () => {
 
       {/* Metric Content */}
       <div className="bg-white rounded-xl border border-slate-200 p-6">
-        {renderMetricContent()}
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <RefreshCw className="h-8 w-8 text-blue-600 animate-spin mx-auto mb-4" />
+              <p className="text-slate-600">Loading analytics data...</p>
+            </div>
+          </div>
+        ) : (
+          renderMetricContent()
+        )}
       </div>
 
       {/* Quick Stats */}

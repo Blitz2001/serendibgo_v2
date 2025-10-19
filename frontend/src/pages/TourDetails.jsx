@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
+import { toast } from 'react-hot-toast'
 import {
   MapPin,
   Star,
@@ -45,6 +47,7 @@ import { useTour } from '../context/TourContext'
 const TourDetails = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user, isAuthenticated } = useAuth()
   const { tours, setCurrentTour } = useTour()
   const [tour, setTour] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -61,6 +64,8 @@ const TourDetails = () => {
   const [showBookingCalendar, setShowBookingCalendar] = useState(false)
   const [selectedBookingDate, setSelectedBookingDate] = useState(new Date())
   const [activeTab, setActiveTab] = useState('overview')
+  const [bookingLoading, setBookingLoading] = useState(false)
+  const [dateError, setDateError] = useState('')
 
   // Fetch tour data
   useEffect(() => {
@@ -75,11 +80,18 @@ const TourDetails = () => {
       setError(null)
 
       const response = await api.get(`/tours/${id}`)
+      console.log('🔍 TourDetails: API Response:', response)
+      console.log('🔍 TourDetails: Response data:', response.data)
+      
       if (response.data.success) {
         const tourData = response.data.data
+        console.log('🔍 TourDetails: Tour data:', tourData)
+        console.log('🔍 TourDetails: Tour images:', tourData.images)
+        console.log('🔍 TourDetails: Images length:', tourData.images?.length)
         setTour(tourData)
         setCurrentTour(tourData)
       } else {
+        console.error('🔍 TourDetails: API returned success: false')
         setError('Tour not found')
       }
     } catch (err) {
@@ -90,21 +102,148 @@ const TourDetails = () => {
     }
   }
 
-  const handleBookingSubmit = (e) => {
+  const handleBookingSubmit = async (e) => {
     e.preventDefault()
-    console.log('Booking submitted:', { tour: tour, ...bookingData })
-    alert('Booking request submitted successfully! We will contact you soon.')
-    setShowBookingModal(false)
-    setBookingData({
-      date: '',
-      duration: '',
-      groupSize: 1,
-      specialRequests: ''
-    })
+    
+    // Check if user is authenticated
+    if (!isAuthenticated || !user) {
+      toast.error('Please login to book a tour')
+      navigate('/login')
+      return
+    }
+
+     // Validate booking data
+     if (!bookingData.date || !bookingData.groupSize) {
+       toast.error('Please fill in all required fields')
+       return
+     }
+
+     // Validate tour date
+     if (!validateTourDate(bookingData.date)) {
+       toast.error(dateError || 'Please select a valid tour date')
+       return
+     }
+
+    try {
+      setBookingLoading(true)
+      
+      console.log('🎯 Creating tour booking:', { 
+        tourId: tour._id, 
+        tourTitle: tour.title,
+        bookingData 
+      })
+
+      // Calculate dates
+      const startDate = new Date(bookingData.date)
+      const endDate = new Date(startDate)
+      endDate.setDate(endDate.getDate() + (tour.duration || 1))
+
+      // Create booking payload
+      const bookingPayload = {
+        tourId: tour._id,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        groupSize: parseInt(bookingData.groupSize),
+        specialRequests: bookingData.specialRequests || ''
+      }
+
+      console.log('Booking payload:', bookingPayload)
+
+      // Create the booking
+      const response = await api.post('/bookings', bookingPayload)
+      
+      if (response.data.success) {
+        const booking = response.data.data
+        const totalAmount = tour.price * bookingData.groupSize
+        
+        console.log('✅ Tour booking created:', booking._id)
+        
+        // Navigate to payment page with booking data
+        navigate('/payment', {
+          state: {
+            bookingId: booking._id,
+            bookingType: 'tour',
+            amount: totalAmount,
+            currency: 'USD',
+            tourName: tour.title,
+            tourDescription: tour.description,
+            startDate: startDate.toISOString().split('T')[0],
+            endDate: endDate.toISOString().split('T')[0],
+            groupSize: bookingData.groupSize,
+            duration: tour.duration,
+            bookingReference: booking.bookingReference
+          }
+        })
+        
+        // Close modal and reset form
+        setShowBookingModal(false)
+        setBookingData({
+          date: '',
+          duration: '',
+          groupSize: 1,
+          specialRequests: ''
+        })
+        
+        toast.success('Booking created successfully! Redirecting to payment...')
+      } else {
+        toast.error(response.data.message || 'Failed to create booking')
+      }
+    } catch (error) {
+      console.error('❌ Error creating tour booking:', error)
+      console.error('Error response:', error.response?.data)
+      
+      if (error.response?.status === 401) {
+        toast.error('Your session has expired. Please login again.')
+        navigate('/login')
+      } else if (error.response?.status === 403) {
+        toast.error('You are not authorized to make this booking.')
+      } else {
+        toast.error(error.response?.data?.message || 'Failed to create booking. Please try again.')
+      }
+    } finally {
+      setBookingLoading(false)
+    }
   }
 
   const toggleWishlist = () => {
     setIsWishlisted(!isWishlisted)
+  }
+
+  // Validate tour date
+  const validateTourDate = (dateString) => {
+    if (!dateString) {
+      setDateError('Please select a tour date')
+      return false
+    }
+
+    const selectedDate = new Date(dateString)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0) // Reset time to start of day
+    
+    // Check if date is in the past
+    if (selectedDate < today) {
+      setDateError('Tour date cannot be in the past')
+      return false
+    }
+
+    // Check if date is too far in the future (optional - 1 year limit)
+    const oneYearFromNow = new Date()
+    oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1)
+    
+    if (selectedDate > oneYearFromNow) {
+      setDateError('Tour date cannot be more than 1 year in advance')
+      return false
+    }
+
+    setDateError('')
+    return true
+  }
+
+  // Handle date change with validation
+  const handleDateChange = (e) => {
+    const dateValue = e.target.value
+    setBookingData({...bookingData, date: dateValue})
+    validateTourDate(dateValue)
   }
 
   const nextImage = () => {
@@ -184,7 +323,34 @@ const TourDetails = () => {
             {/* Image Gallery */}
             <div className="relative mb-8">
               <div className="aspect-[16/10] bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-3xl overflow-hidden relative">
-                <div className="w-full h-full flex items-center justify-center">
+                {tour.images && tour.images.length > 0 ? (
+                  <img
+                    src={typeof tour.images[currentImageIndex] === 'string' ? tour.images[currentImageIndex] : tour.images[currentImageIndex]?.url}
+                    alt={tour.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.error('Tour details image failed to load:', {
+                        tourTitle: tour.title,
+                        imageSrc: e.target.src,
+                        currentImageIndex,
+                        imagesData: tour.images
+                      });
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                    onLoad={() => {
+                      console.log('Tour details image loaded successfully:', {
+                        tourTitle: tour.title,
+                        imageSrc: typeof tour.images[currentImageIndex] === 'string' ? tour.images[currentImageIndex] : tour.images[currentImageIndex]?.url,
+                        currentImageIndex
+                      });
+                    }}
+                  />
+                ) : null}
+                <div 
+                  className="w-full h-full flex items-center justify-center"
+                  style={{ display: (tour.images && tour.images.length > 0) ? 'none' : 'flex' }}
+                >
                   <MapPin className="w-24 h-24 text-blue-500/30" />
                 </div>
                 
@@ -585,18 +751,19 @@ const TourDetails = () => {
 
       {/* Booking Modal */}
       {showBookingModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 my-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full sm:max-w-lg shadow-2xl border border-slate-200 my-4 transform transition-all duration-300 scale-100 max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-slate-200 p-6 rounded-t-3xl">
-              <div className="flex justify-between items-center">
+            <div className="bg-gradient-to-r from-blue-600 to-cyan-500 text-white p-6 rounded-t-3xl relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600/90 to-cyan-500/90"></div>
+              <div className="relative flex justify-between items-center">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">Book {tour.title}</h2>
-                  <p className="text-slate-600 font-medium">Complete your booking details below</p>
+                  <h2 className="text-2xl font-bold mb-1">Book Your Adventure</h2>
+                  <p className="text-blue-100 font-medium">{tour.title}</p>
                 </div>
                 <button
                   onClick={() => setShowBookingModal(false)}
-                  className="p-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-all duration-200"
+                  className="p-2 rounded-2xl bg-white/20 hover:bg-white/30 text-white hover:text-white transition-all duration-200 backdrop-blur-sm"
                 >
                   <X className="h-6 w-6" />
                 </button>
@@ -606,82 +773,120 @@ const TourDetails = () => {
             <div className="p-6">
               {/* Price Display */}
               <div className="text-center mb-6">
-                {tour.originalPrice && (
-                  <div className="text-lg text-slate-500 line-through mb-2">${tour.originalPrice}</div>
-                )}
-                <div className="text-3xl font-bold text-slate-900 mb-2">${tour.price}</div>
-                <div className="text-slate-600">per person</div>
+                <div className="inline-flex items-center justify-center px-6 py-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl border border-green-200">
+                  {tour.originalPrice && (
+                    <div className="text-lg text-slate-500 line-through mr-3">${tour.originalPrice}</div>
+                  )}
+                  <div className="text-4xl font-bold text-green-600">${tour.price}</div>
+                  <div className="text-slate-600 ml-2 text-sm">per person</div>
+                </div>
               </div>
 
               <form onSubmit={handleBookingSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Tour Date</label>
-                  <input
-                    type="date"
-                    value={bookingData.date}
-                    onChange={(e) => setBookingData({...bookingData, date: e.target.value})}
-                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900"
-                    required
-                  />
+                {/* Tour Date */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-blue-500" />
+                    Tour Date
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={bookingData.date}
+                      onChange={handleDateChange}
+                      min={new Date().toISOString().split('T')[0]}
+                      className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl focus:ring-2 focus:ring-blue-500 text-slate-900 font-medium transition-all duration-200 hover:border-slate-300 ${
+                        dateError 
+                          ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+                          : 'border-slate-200 focus:border-blue-500'
+                      }`}
+                      required
+                    />
+                    {dateError && (
+                      <div className="absolute -bottom-6 left-0 text-red-500 text-sm flex items-center gap-1">
+                        <AlertCircle className="w-4 h-4" />
+                        {dateError}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-sm text-slate-600 flex items-center gap-1">
+                    <Info className="w-4 h-4" />
+                    Select a date from today onwards
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Group Size</label>
-                  <div className="flex items-center gap-2">
+                {/* Group Size */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-blue-500" />
+                    Group Size
+                  </label>
+                  <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => setBookingData({...bookingData, groupSize: Math.max(1, bookingData.groupSize - 1)})}
-                      className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700"
+                      className="p-3 border-2 border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 text-slate-700 transition-all duration-200 flex items-center justify-center"
                     >
-                      <Minus className="w-4 h-4" />
+                      <Minus className="w-5 h-5" />
                     </button>
-                    <input
-                      type="number"
-                      value={bookingData.groupSize}
-                      onChange={(e) => setBookingData({...bookingData, groupSize: parseInt(e.target.value) || 1})}
-                      min="1"
-                      max={tour.maxParticipants}
-                      className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-slate-900"
-                    />
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        value={bookingData.groupSize}
+                        onChange={(e) => setBookingData({...bookingData, groupSize: parseInt(e.target.value) || 1})}
+                        min="1"
+                        max={tour.maxParticipants}
+                        className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-slate-900 font-bold text-lg transition-all duration-200 hover:border-slate-300"
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => setBookingData({...bookingData, groupSize: Math.min(tour.maxParticipants, bookingData.groupSize + 1)})}
-                      className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700"
+                      className="p-3 border-2 border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 text-slate-700 transition-all duration-200 flex items-center justify-center"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Plus className="w-5 h-5" />
                     </button>
                   </div>
-                  <div className="text-sm text-slate-600 mt-1">
-                    {tour.minParticipants}-{tour.maxParticipants} people
+                  <div className="text-sm text-slate-600 flex items-center gap-1">
+                    <Info className="w-4 h-4" />
+                    {tour.minParticipants}-{tour.maxParticipants} people allowed
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Special Requests</label>
+                {/* Special Requests */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                    <MessageCircle className="w-4 h-4 text-blue-500" />
+                    Special Requests
+                  </label>
                   <textarea
                     value={bookingData.specialRequests}
                     onChange={(e) => setBookingData({...bookingData, specialRequests: e.target.value})}
                     rows="3"
-                    placeholder="Any special requirements..."
-                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-slate-900 placeholder-slate-400"
+                    placeholder="Any special requirements, dietary restrictions, or preferences..."
+                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-slate-900 placeholder-slate-400 transition-all duration-200 hover:border-slate-300"
                   />
                 </div>
 
                 {/* Total Price */}
-                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-4 border border-green-200">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-slate-900">Total Price</span>
-                    <span className="text-2xl font-bold text-green-600">
-                      ${(tour.price * bookingData.groupSize).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="text-sm text-slate-600 mt-1">
-                    {bookingData.groupSize} person(s) × ${tour.price}
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-4 border-2 border-green-200 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 to-emerald-500/5"></div>
+                  <div className="relative">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-bold text-slate-900 text-lg">Total Price</span>
+                      <span className="text-3xl font-bold text-green-600">
+                        ${(tour.price * bookingData.groupSize).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="text-sm text-slate-600 flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      {bookingData.groupSize} person(s) × ${tour.price} per person
+                    </div>
                   </div>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex gap-3">
+                <div className="flex gap-3 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowBookingModal(false)}
@@ -691,21 +896,35 @@ const TourDetails = () => {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-2xl hover:from-blue-700 hover:to-cyan-600 transition-all duration-300 font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-2"
+                    disabled={bookingLoading}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-2xl hover:from-blue-700 hover:to-cyan-600 transition-all duration-300 font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
-                    <BookOpen className="h-4 w-4" />
-                    Book Now
+                    {bookingLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Creating Booking...
+                      </>
+                    ) : (
+                      <>
+                        <BookOpen className="h-4 w-4" />
+                        Book Now
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
 
               {/* Cancellation Policy */}
-              <div className="mt-6 pt-6 border-t border-slate-200">
-                <div className="flex items-start gap-3">
-                  <Shield className="w-5 h-5 text-green-500 mt-1 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-semibold text-slate-900 mb-1">Cancellation Policy</h4>
-                    <p className="text-sm text-slate-600">{tour.cancellationDetails}</p>
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl p-4 border border-blue-200">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-blue-100 rounded-xl">
+                      <Shield className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 mb-2">Cancellation Policy</h4>
+                      <p className="text-sm text-slate-600 leading-relaxed">{tour.cancellationDetails || 'Free cancellation up to 24 hours before the tour start time.'}</p>
+                    </div>
                   </div>
                 </div>
               </div>

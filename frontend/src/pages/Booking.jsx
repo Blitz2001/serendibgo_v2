@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
-import { Calendar, MapPin, Users, CreditCard, CheckCircle, Loader2 } from 'lucide-react'
+import { useSearchParams, useNavigate, useParams } from 'react-router-dom'
+import { Calendar, MapPin, Users, CreditCard, CheckCircle, Loader2, AlertCircle, Info } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
 import toast from 'react-hot-toast'
@@ -8,14 +8,20 @@ import toast from 'react-hot-toast'
 const Booking = () => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { tourId } = useParams() // Get tourId from URL params
   const { user, isAuthenticated } = useAuth()
   const vehicleId = searchParams.get('vehicle')
   
   const [vehicle, setVehicle] = useState(null)
+  const [tour, setTour] = useState(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [dateErrors, setDateErrors] = useState({
+    startDate: '',
+    endDate: ''
+  })
   const [formData, setFormData] = useState({
-    // Trip Details
+    // Trip Details (for vehicles)
     pickupLocation: {
       address: '',
       city: '',
@@ -30,6 +36,10 @@ const Booking = () => {
     endDate: '',
     startTime: '',
     endTime: '',
+    
+    // Tour Details (for tours)
+    tourDate: '',
+    participants: 1,
     
     // Passengers
     adults: 1,
@@ -46,29 +56,42 @@ const Booking = () => {
     specialRequests: ''
   })
 
-  // Fetch vehicle details
+  // Fetch vehicle or tour details
   useEffect(() => {
-    const fetchVehicle = async () => {
-      if (!vehicleId) {
-        toast.error('No vehicle selected')
-        navigate('/vehicles')
+    const fetchData = async () => {
+      if (vehicleId) {
+        // Fetch vehicle details
+        try {
+          const response = await api.get(`/vehicles/${vehicleId}`)
+          setVehicle(response.data.data)
+        } catch (error) {
+          console.error('Error fetching vehicle:', error)
+          toast.error('Failed to load vehicle details')
+          navigate('/vehicles')
+        } finally {
+          setLoading(false)
+        }
+      } else if (tourId) {
+        // Fetch tour details
+        try {
+          const response = await api.get(`/tours/${tourId}`)
+          setTour(response.data.data)
+        } catch (error) {
+          console.error('Error fetching tour:', error)
+          toast.error('Failed to load tour details')
+          navigate('/tours')
+        } finally {
+          setLoading(false)
+        }
+      } else {
+        toast.error('No vehicle or tour selected')
+        navigate('/')
         return
-      }
-      
-      try {
-        const response = await api.get(`/vehicles/${vehicleId}`)
-        setVehicle(response.data.data)
-      } catch (error) {
-        console.error('Error fetching vehicle:', error)
-        toast.error('Failed to load vehicle details')
-        navigate('/vehicles')
-      } finally {
-        setLoading(false)
       }
     }
 
-    fetchVehicle()
-  }, [vehicleId, navigate])
+    fetchData()
+  }, [vehicleId, tourId, navigate])
 
   // Pre-fill user details if logged in
   useEffect(() => {
@@ -111,65 +134,218 @@ const Booking = () => {
     }
   }
 
+  // Validate vehicle booking dates
+  const validateVehicleDates = (startDate, endDate) => {
+    const errors = { startDate: '', endDate: '' }
+    let isValid = true
+
+    if (!startDate) {
+      errors.startDate = 'Please select a start date'
+      isValid = false
+    } else {
+      const start = new Date(startDate)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      if (start < today) {
+        errors.startDate = 'Start date cannot be in the past'
+        isValid = false
+      }
+
+      // Check if start date is more than 1 year in advance
+      const oneYearFromNow = new Date()
+      oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1)
+      if (start > oneYearFromNow) {
+        errors.startDate = 'Start date cannot be more than 1 year in advance'
+        isValid = false
+      }
+    }
+
+    if (!endDate) {
+      errors.endDate = 'Please select an end date'
+      isValid = false
+    } else {
+      const end = new Date(endDate)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      if (end < today) {
+        errors.endDate = 'End date cannot be in the past'
+        isValid = false
+      }
+
+      // Check if end date is more than 1 year in advance
+      const oneYearFromNow = new Date()
+      oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1)
+      if (end > oneYearFromNow) {
+        errors.endDate = 'End date cannot be more than 1 year in advance'
+        isValid = false
+      }
+    }
+
+    // Check if end date is before start date
+    if (startDate && endDate) {
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      
+      if (end < start) {
+        errors.endDate = 'End date must be after start date'
+        isValid = false
+      }
+
+      // Check if rental period is too long (more than 30 days)
+      const diffTime = Math.abs(end - start)
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      
+      if (diffDays > 30) {
+        errors.endDate = 'Rental period cannot exceed 30 days'
+        isValid = false
+      }
+    }
+
+    setDateErrors(errors)
+    return isValid
+  }
+
+  // Handle date input changes with validation
+  const handleDateChange = (e) => {
+    const { name, value } = e.target
+    
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
+
+    // Validate dates when both are present
+    if (name === 'startDate') {
+      validateVehicleDates(value, formData.endDate)
+    } else if (name === 'endDate') {
+      validateVehicleDates(formData.startDate, value)
+    }
+  }
+
   const calculatePrice = () => {
-    if (!vehicle?.pricing) return 0
+    if (vehicle?.pricing) {
+      // Vehicle pricing calculation
+      const startDate = new Date(formData.startDate)
+      const endDate = new Date(formData.endDate)
+      const hours = Math.ceil((endDate - startDate) / (1000 * 60 * 60))
+      
+      const basePrice = vehicle.pricing.basePrice || 0
+      const hourlyRate = vehicle.pricing.hourlyRate || 0
+      const dailyRate = vehicle.pricing.dailyRate || 0
+      
+      // Use daily rate if more than 8 hours, otherwise hourly
+      const durationPrice = hours > 8 ? dailyRate : (hours * hourlyRate)
+      const subtotal = basePrice + durationPrice
+      const taxes = subtotal * 0.1 // 10% tax
+      const serviceCharge = subtotal * 0.05 // 5% service charge
+      
+      return subtotal + taxes + serviceCharge
+    } else if (tour?.price) {
+      // Tour pricing calculation
+      const basePrice = tour.price * parseInt(formData.participants)
+      const taxes = basePrice * 0.1 // 10% tax
+      const serviceCharge = basePrice * 0.05 // 5% service charge
+      
+      return basePrice + taxes + serviceCharge
+    }
     
-    const startDate = new Date(formData.startDate)
-    const endDate = new Date(formData.endDate)
-    const hours = Math.ceil((endDate - startDate) / (1000 * 60 * 60))
-    
-    const basePrice = vehicle.pricing.basePrice || 0
-    const hourlyRate = vehicle.pricing.hourlyRate || 0
-    const dailyRate = vehicle.pricing.dailyRate || 0
-    
-    // Use daily rate if more than 8 hours, otherwise hourly
-    const durationPrice = hours > 8 ? dailyRate : (hours * hourlyRate)
-    const subtotal = basePrice + durationPrice
-    const taxes = subtotal * 0.1 // 10% tax
-    const serviceCharge = subtotal * 0.05 // 5% service charge
-    
-    return subtotal + taxes + serviceCharge
+    return 0
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!vehicle) {
-      toast.error('Vehicle not found')
+    if (!vehicle && !tour) {
+      toast.error('Vehicle or tour not found')
+      return
+    }
+
+    // Validate vehicle dates if booking a vehicle
+    if (vehicle && !validateVehicleDates(formData.startDate, formData.endDate)) {
+      toast.error('Please fix the date errors before submitting')
       return
     }
 
     setSubmitting(true)
     
     try {
-      const bookingData = {
-        vehicle: vehicleId,
-        tripDetails: {
-          pickupLocation: formData.pickupLocation,
-          dropoffLocation: formData.dropoffLocation,
-          startDate: new Date(formData.startDate).toISOString(),
-          endDate: new Date(formData.endDate).toISOString(),
-          startTime: formData.startTime,
-          endTime: formData.endTime
-        },
-        passengers: {
-          adults: parseInt(formData.adults),
-          children: parseInt(formData.children),
-          infants: parseInt(formData.infants)
-        },
-        guestDetails: {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          phone: formData.phone
-        },
-        specialRequests: formData.specialRequests
-      }
-
-      const response = await api.post('/vehicle-bookings', bookingData)
+      let bookingData, response
       
-      toast.success('Booking created successfully!')
-      navigate('/my-bookings')
+      if (vehicle) {
+        // Vehicle booking
+        bookingData = {
+          vehicle: vehicleId,
+          tripDetails: {
+            pickupLocation: formData.pickupLocation,
+            dropoffLocation: formData.dropoffLocation,
+            startDate: new Date(formData.startDate).toISOString(),
+            endDate: new Date(formData.endDate).toISOString(),
+            startTime: formData.startTime,
+            endTime: formData.endTime
+          },
+          passengers: {
+            adults: parseInt(formData.adults),
+            children: parseInt(formData.children),
+            infants: parseInt(formData.infants)
+          },
+          guestDetails: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            phone: formData.phone
+          },
+          specialRequests: formData.specialRequests
+        }
+        
+        response = await api.post('/vehicle-bookings', bookingData)
+      } else if (tour) {
+        // Tour booking
+        bookingData = {
+          tourId: tourId,
+          startDate: new Date(formData.tourDate).toISOString(),
+          endDate: new Date(formData.tourDate).toISOString(), // Same day for tours
+          groupSize: parseInt(formData.participants),
+          specialRequests: formData.specialRequests
+        }
+        
+        response = await api.post('/bookings', bookingData)
+      }
+      
+      if (response.data.status === 'success') {
+        const booking = response.data.data.booking || response.data.data
+        const totalAmount = calculatePrice()
+        
+        console.log('=== BOOKING CREATED ===')
+        console.log('Response data:', response.data)
+        console.log('Booking object:', booking)
+        console.log('Booking ID:', booking?._id)
+        console.log('Total amount:', totalAmount)
+        
+        // Navigate to payment page
+        navigate('/payment', {
+          state: {
+            bookingId: booking._id,
+            bookingType: vehicle ? 'vehicle' : 'tour',
+            amount: totalAmount,
+            currency: 'LKR',
+            serviceName: vehicle ? (vehicle.make + ' ' + vehicle.model) : tour.title,
+            serviceDescription: vehicle ? vehicle.description : tour.description,
+            startDate: vehicle ? formData.startDate : formData.tourDate,
+            endDate: vehicle ? formData.endDate : formData.tourDate,
+            groupSize: vehicle ? (parseInt(formData.adults) + parseInt(formData.children) + parseInt(formData.infants)) : formData.participants,
+            guestDetails: {
+              firstName: formData.firstName,
+              lastName: formData.lastName,
+              email: formData.email,
+              phone: formData.phone
+            }
+          }
+        })
+      } else {
+        toast.error(response.data.message || 'Failed to create booking')
+      }
       
     } catch (error) {
       console.error('Booking error:', error)
@@ -184,21 +360,21 @@ const Booking = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2 text-gray-600">Loading vehicle details...</span>
+        <span className="ml-2 text-gray-600">Loading details...</span>
       </div>
     )
   }
 
-  if (!vehicle) {
+  if (!vehicle && !tour) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Vehicle not found</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Service not found</h2>
           <button 
-            onClick={() => navigate('/vehicles')}
+            onClick={() => navigate('/')}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
           >
-            Back to Vehicles
+            Go Home
           </button>
         </div>
       </div>
@@ -209,27 +385,35 @@ const Booking = () => {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Book Vehicle</h1>
-          <p className="text-gray-600">Complete your vehicle rental booking</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            {vehicle ? 'Book Vehicle' : 'Book Tour'}
+          </h1>
+          <p className="text-gray-600">
+            {vehicle ? 'Complete your vehicle rental booking' : 'Complete your tour booking'}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Vehicle Summary */}
+          {/* Service Summary */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Booking Summary</h3>
               
               <div className="space-y-4">
                 <div>
-                  <h4 className="font-medium text-gray-900">{vehicle.name}</h4>
-                  <p className="text-sm text-gray-500">{vehicle.vehicleType}</p>
+                  <h4 className="font-medium text-gray-900">
+                    {vehicle ? vehicle.name : tour.title}
+                  </h4>
+                  <p className="text-sm text-gray-500">
+                    {vehicle ? vehicle.vehicleType : tour.category}
+                  </p>
                 </div>
                 
-                {vehicle.images && vehicle.images.length > 0 && (
+                {(vehicle?.images || tour?.images) && (vehicle?.images?.length > 0 || tour?.images?.length > 0) && (
                   <div className="h-32 bg-gray-200 rounded-lg overflow-hidden">
                     <img 
-                      src={vehicle.images[0].url || vehicle.images[0]} 
-                      alt={vehicle.name}
+                      src={vehicle ? (vehicle.images[0].url || vehicle.images[0]) : (tour.images[0].url || tour.images[0])} 
+                      alt={vehicle ? vehicle.name : tour.title}
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -251,46 +435,100 @@ const Booking = () => {
           <div className="lg:col-span-2">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Trip Details */}
+                {/* Service Details */}
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                     <Calendar className="h-5 w-5 mr-2" />
-                    Trip Details
+                    {vehicle ? 'Trip Details' : 'Tour Details'}
                   </h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Start Date
-                      </label>
-                      <input
-                        type="date"
-                        name="startDate"
-                        value={formData.startDate}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                      />
-                    </div>
+                    {vehicle ? (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Start Date
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="date"
+                              name="startDate"
+                              value={formData.startDate}
+                              onChange={handleDateChange}
+                              min={new Date().toISOString().split('T')[0]}
+                              required
+                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${
+                                dateErrors.startDate 
+                                  ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+                                  : 'border-gray-300 focus:border-primary'
+                              }`}
+                            />
+                            {dateErrors.startDate && (
+                              <div className="absolute -bottom-6 left-0 text-red-500 text-sm flex items-center gap-1">
+                                <AlertCircle className="w-4 h-4" />
+                                {dateErrors.startDate}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                            <Info className="w-3 h-3" />
+                            Select today or future date
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            End Date
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="date"
+                              name="endDate"
+                              value={formData.endDate}
+                              onChange={handleDateChange}
+                              min={formData.startDate || new Date().toISOString().split('T')[0]}
+                              required
+                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${
+                                dateErrors.endDate 
+                                  ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+                                  : 'border-gray-300 focus:border-primary'
+                              }`}
+                            />
+                            {dateErrors.endDate && (
+                              <div className="absolute -bottom-6 left-0 text-red-500 text-sm flex items-center gap-1">
+                                <AlertCircle className="w-4 h-4" />
+                                {dateErrors.endDate}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                            <Info className="w-3 h-3" />
+                            Must be after start date (max 30 days)
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Tour Date
+                        </label>
+                        <input
+                          type="date"
+                          name="tourDate"
+                          value={formData.tourDate}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                        />
+                      </div>
+                    )}
                     
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        End Date
-                      </label>
-                      <input
-                        type="date"
-                        name="endDate"
-                        value={formData.endDate}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Start Time
-                      </label>
+                    {vehicle && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Start Time
+                          </label>
                       <input
                         type="time"
                         name="startTime"
@@ -314,15 +552,18 @@ const Booking = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                       />
                     </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                {/* Pickup Location */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <MapPin className="h-5 w-5 mr-2" />
-                    Pickup Location
-                  </h3>
+                {/* Pickup Location (for vehicles) or Participants (for tours) */}
+                {vehicle ? (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <MapPin className="h-5 w-5 mr-2" />
+                      Pickup Location
+                    </h3>
                   
                   <div className="space-y-4">
                     <div>
@@ -373,10 +614,38 @@ const Booking = () => {
                     </div>
                   </div>
                 </div>
+                ) : (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <Users className="h-5 w-5 mr-2" />
+                      Participants
+                    </h3>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Number of Participants
+                      </label>
+                      <input
+                        type="number"
+                        name="participants"
+                        value={formData.participants}
+                        onChange={handleInputChange}
+                        min="1"
+                        max={tour?.maxParticipants || 20}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                      />
+                      <p className="text-sm text-gray-500 mt-1">
+                        Maximum: {tour?.maxParticipants || 20} participants
+                      </p>
+                    </div>
+                  </div>
+                )}
 
-                {/* Dropoff Location */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Dropoff Location</h3>
+                {/* Dropoff Location (vehicles only) */}
+                {vehicle && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Dropoff Location</h3>
                   
                   <div className="space-y-4">
                     <div>
@@ -427,13 +696,15 @@ const Booking = () => {
                     </div>
                   </div>
                 </div>
+                )}
 
-                {/* Passengers */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <Users className="h-5 w-5 mr-2" />
-                    Passengers
-                  </h3>
+                {/* Passengers (vehicles only) */}
+                {vehicle && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <Users className="h-5 w-5 mr-2" />
+                      Passengers
+                    </h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
@@ -480,6 +751,7 @@ const Booking = () => {
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* Guest Details */}
                 <div>

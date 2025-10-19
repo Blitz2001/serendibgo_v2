@@ -18,6 +18,7 @@ import {
   User,
   Eye,
   ChevronDown,
+  Building,
   LogOut,
   ExternalLink,
   Home,
@@ -88,6 +89,8 @@ const AdminDashboard = () => {
   // Permissions management state
   const [permissions, setPermissions] = useState([]);
   const [permissionTemplates, setPermissionTemplates] = useState([]);
+  const [permissionSearchTerm, setPermissionSearchTerm] = useState('');
+  const [permissionStatusFilter, setPermissionStatusFilter] = useState('all');
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [selectedPermission, setSelectedPermission] = useState(null);
@@ -782,13 +785,35 @@ const AdminDashboard = () => {
     try {
       console.log('fetchAnalyticsData called');
       
-      // Fetch real analytics data from backend
-      const response = await api.get('/admin/analytics', {
-        params: { period: analyticsPeriod === '7days' ? '7d' : '30d' }
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Analytics request timeout')), 15000); // 15 second timeout
       });
 
+      // Fetch real analytics data from backend with timeout
+      const analyticsPromise = api.get('/admin/analytics', {
+        params: { period: analyticsPeriod === '7days' ? '7d' : '30d' },
+        timeout: 15000 // 15 second timeout
+      });
+
+      const response = await Promise.race([analyticsPromise, timeoutPromise]);
+
       if (response.data.success) {
-        const { userTrends, bookingTrends, hotelTrends } = response.data.data;
+        const { 
+          userTrends, 
+          bookingTrends, 
+          hotelTrends, 
+          topHotels,
+          totalNewUsers,
+          avgActiveUsers,
+          totalBookings,
+          totalRevenue,
+          userGrowthRate,
+          bookingGrowthRate,
+          revenueGrowthRate,
+          avgBookingValue,
+          platformStats
+        } = response.data.data;
         
         // Transform user trends data
         const transformedUserAnalytics = userTrends.map(trend => ({
@@ -808,17 +833,7 @@ const AdminDashboard = () => {
           revenue: trend.revenue || 0
         }));
 
-        // Calculate analytics stats
-        const totalNewUsers = userTrends.reduce((sum, trend) => sum + trend.count, 0);
-        const avgActiveUsers = Math.floor(totalNewUsers * 0.7);
-        const totalBookings = bookingTrends.reduce((sum, trend) => sum + trend.count, 0);
-        const totalRevenue = bookingTrends.reduce((sum, trend) => sum + (trend.revenue || 0), 0);
-
-        // Calculate growth rates (mock calculation for now)
-        const userGrowthRate = 12.5;
-        const bookingGrowthRate = 8.3;
-        const revenueGrowthRate = 15.2;
-
+        // Set analytics data with real values from backend
         setAnalyticsData({
           totalNewUsers,
           avgActiveUsers,
@@ -827,7 +842,8 @@ const AdminDashboard = () => {
           userGrowthRate,
           bookingGrowthRate,
           revenueGrowthRate,
-          avgBookingValue: totalBookings > 0 ? Math.floor(totalRevenue / totalBookings) : 0
+          avgBookingValue,
+          platformStats
         });
 
         setUserAnalytics(transformedUserAnalytics);
@@ -837,10 +853,23 @@ const AdminDashboard = () => {
           revenue: item.revenue
         })));
 
-        console.log('Analytics data set successfully from database');
+        console.log('Analytics data set successfully from database:', {
+          totalNewUsers,
+          avgActiveUsers,
+          totalBookings,
+          totalRevenue,
+          userGrowthRate,
+          bookingGrowthRate,
+          revenueGrowthRate
+        });
       }
     } catch (error) {
       console.error('Error fetching analytics data:', error);
+      
+      // Handle timeout specifically
+      if (error.message === 'Analytics request timeout' || error.code === 'ECONNABORTED') {
+        console.warn('Analytics request timed out, using fallback data');
+      }
       
       // Fallback to mock data if API fails
       const mockUserAnalytics = [
@@ -1079,6 +1108,18 @@ const AdminDashboard = () => {
   // Fetch data when tabs are active
   useEffect(() => {
     console.log('Active tab changed to:', activeTab);
+    
+    // Clear search and filter terms when switching tabs
+    setPayrollSearchTerm('');
+    setPayrollStatusFilter('all');
+    setUserSearchTerm('');
+    setUserStatusFilter('all');
+    setUserRoleFilter('all');
+    setStaffSearchTerm('');
+    setStaffStatusFilter('all');
+    setPermissionSearchTerm('');
+    setPermissionStatusFilter('all');
+    
     if (activeTab === 'payroll') {
       console.log('Fetching payroll data...');
       fetchPayrollData();
@@ -1093,6 +1134,13 @@ const AdminDashboard = () => {
       fetchSettingsData();
     }
   }, [activeTab]);
+
+  // Refetch analytics data when period changes
+  useEffect(() => {
+    if (activeTab === 'analytics') {
+      fetchAnalyticsData();
+    }
+  }, [analyticsPeriod]);
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -1117,7 +1165,7 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-cyan-50">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 shadow-sm">
+      <div className="bg-white border-b border-slate-200 shadow-sm fixed top-0 left-0 right-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -1198,11 +1246,11 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 sticky top-8">
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 sticky top-24">
               <nav className="space-y-2">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
@@ -1879,7 +1927,23 @@ const AdminDashboard = () => {
                 {/* Payroll List */}
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-semibold text-slate-900">Payroll Records</h3>
+                    <div>
+                      <h3 className="text-xl font-semibold text-slate-900">Payroll Records</h3>
+                      <p className="text-sm text-slate-600 mt-1">
+                        Showing {payrollData
+                          .filter(payroll => {
+                            const matchesSearch = payrollSearchTerm === '' || 
+                              payroll.staffName.toLowerCase().includes(payrollSearchTerm.toLowerCase()) ||
+                              payroll.staffId.toLowerCase().includes(payrollSearchTerm.toLowerCase()) ||
+                              payroll.position.toLowerCase().includes(payrollSearchTerm.toLowerCase());
+                            
+                            const matchesStatus = payrollStatusFilter === 'all' || 
+                              payroll.status === payrollStatusFilter;
+                            
+                            return matchesSearch && matchesStatus;
+                          }).length} of {payrollData.length} records
+                      </p>
+                    </div>
                     <div className="flex items-center space-x-4">
                       <div className="relative">
                         <input
@@ -1919,7 +1983,21 @@ const AdminDashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {payrollData.map((payroll) => (
+                        {payrollData
+                          .filter(payroll => {
+                            // Apply search filter
+                            const matchesSearch = payrollSearchTerm === '' || 
+                              payroll.staffName.toLowerCase().includes(payrollSearchTerm.toLowerCase()) ||
+                              payroll.staffId.toLowerCase().includes(payrollSearchTerm.toLowerCase()) ||
+                              payroll.position.toLowerCase().includes(payrollSearchTerm.toLowerCase());
+                            
+                            // Apply status filter
+                            const matchesStatus = payrollStatusFilter === 'all' || 
+                              payroll.status === payrollStatusFilter;
+                            
+                            return matchesSearch && matchesStatus;
+                          })
+                          .map((payroll) => (
                           <tr key={payroll._id} className="border-b border-slate-100 hover:bg-slate-50">
                             <td className="py-2 px-1">
                               <div className="flex items-center">
@@ -1973,10 +2051,37 @@ const AdminDashboard = () => {
                               </div>
                             </td>
                           </tr>
-                        ))}
+                          ))}
                       </tbody>
                     </table>
                   </div>
+                  
+                  {/* No results message */}
+                  {payrollData
+                    .filter(payroll => {
+                      const matchesSearch = payrollSearchTerm === '' || 
+                        payroll.staffName.toLowerCase().includes(payrollSearchTerm.toLowerCase()) ||
+                        payroll.staffId.toLowerCase().includes(payrollSearchTerm.toLowerCase()) ||
+                        payroll.position.toLowerCase().includes(payrollSearchTerm.toLowerCase());
+                      
+                      const matchesStatus = payrollStatusFilter === 'all' || 
+                        payroll.status === payrollStatusFilter;
+                      
+                      return matchesSearch && matchesStatus;
+                    }).length === 0 && (
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <User className="h-8 w-8 text-slate-400" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-slate-700 mb-2">No payroll records found</h3>
+                      <p className="text-slate-500">
+                        {payrollSearchTerm || payrollStatusFilter !== 'all' 
+                          ? 'Try adjusting your search or filter criteria'
+                          : 'No payroll records available at the moment'
+                        }
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2067,6 +2172,72 @@ const AdminDashboard = () => {
                         <p className="text-sm text-slate-600">Total Revenue</p>
                         <p className="text-xs text-green-600 font-medium">+{analyticsData.revenueGrowthRate || 0}%</p>
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Platform Overview */}
+                <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
+                  <h3 className="text-xl font-semibold text-slate-900 mb-6">Platform Overview</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+                        <Users className="h-8 w-8 text-blue-600" />
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">{analyticsData.platformStats?.totalUsers || 0}</p>
+                      <p className="text-sm text-slate-600">Total Users</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+                        <Building className="h-8 w-8 text-green-600" />
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">{analyticsData.platformStats?.totalHotels || 0}</p>
+                      <p className="text-sm text-slate-600">Total Hotels</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+                        <BarChart3 className="h-8 w-8 text-purple-600" />
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">{analyticsData.platformStats?.totalBookings || 0}</p>
+                      <p className="text-sm text-slate-600">Total Bookings</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-orange-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+                        <DollarSign className="h-8 w-8 text-orange-600" />
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">Rs. {(analyticsData.platformStats?.totalRevenue || 0).toLocaleString()}</p>
+                      <p className="text-sm text-slate-600">Total Revenue</p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                        <Shield className="h-6 w-6 text-slate-600" />
+                      </div>
+                      <p className="text-lg font-semibold text-slate-900">{analyticsData.platformStats?.totalStaff || 0}</p>
+                      <p className="text-sm text-slate-600">Staff Members</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                        <User className="h-6 w-6 text-slate-600" />
+                      </div>
+                      <p className="text-lg font-semibold text-slate-900">{analyticsData.platformStats?.totalGuides || 0}</p>
+                      <p className="text-sm text-slate-600">Guides</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                        <Users className="h-6 w-6 text-slate-600" />
+                      </div>
+                      <p className="text-lg font-semibold text-slate-900">{analyticsData.platformStats?.totalTourists || 0}</p>
+                      <p className="text-sm text-slate-600">Tourists</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                        <TrendingUp className="h-6 w-6 text-slate-600" />
+                      </div>
+                      <p className="text-lg font-semibold text-slate-900">Rs. {(analyticsData.avgBookingValue || 0).toLocaleString()}</p>
+                      <p className="text-sm text-slate-600">Avg Booking Value</p>
                     </div>
                   </div>
                 </div>

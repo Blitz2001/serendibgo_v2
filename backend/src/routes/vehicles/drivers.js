@@ -15,6 +15,7 @@ const {
   getDriverStats,
   verifyDriverDocuments
 } = require('../../controllers/vehicles/driverController');
+const { generateDriverPDFReport } = require('../../controllers/vehicles/driverReportController');
 const { protect, authorize } = require('../../middleware/auth');
 const { body, param, query } = require('express-validator');
 const { handleValidationErrors } = require('../../middleware/errorHandler');
@@ -190,5 +191,17 @@ router.patch('/:driverId/verify', [
   body('notes').optional().isString().withMessage('Notes must be a string'),
   handleValidationErrors
 ], verifyDriverDocuments);
+
+// Report generation routes
+// @desc    Generate PDF report for driver
+// @route   POST /api/drivers/reports/generate
+// @access  Private (Driver only)
+router.post('/reports/generate', [
+  protect,
+  authorize('driver'),
+  body('reportType').optional().isIn(['overview', 'trips', 'earnings', 'performance', 'reviews', 'vehicles']).withMessage('Invalid report type'),
+  body('period').optional().isIn(['7d', '30d', '90d', '1y']).withMessage('Invalid period'),
+  handleValidationErrors
+], generateDriverPDFReport);
 
 module.exports = router;

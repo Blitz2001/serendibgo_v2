@@ -54,6 +54,12 @@ const Header = () => {
       navigate('/admin/settings')
     } else if (user?.role === 'staff') {
       navigate('/staff')
+    } else if (user?.role === 'hotel_owner') {
+      navigate('/hotel-owner')
+    } else if (user?.role === 'driver') {
+      navigate('/driver')
+    } else if (user?.role === 'vehicle_owner') {
+      navigate('/vehicle-owner')
     } else {
       navigate('/profile')
     }
@@ -211,6 +217,32 @@ const Header = () => {
                         {/* Menu Items */}
                         <div className="py-2">
                           <button
+                            onClick={() => {
+                              // Navigate to appropriate dashboard based on role
+                              if (user?.role === 'guide') {
+                                navigate('/guide')
+                              } else if (user?.role === 'admin') {
+                                navigate('/admin')
+                              } else if (user?.role === 'staff') {
+                                navigate('/staff')
+                              } else if (user?.role === 'hotel_owner') {
+                                navigate('/hotel-owner')
+                              } else if (user?.role === 'driver') {
+                                navigate('/driver')
+                              } else if (user?.role === 'vehicle_owner') {
+                                navigate('/vehicle-owner')
+                              } else {
+                                navigate('/dashboard')
+                              }
+                              setIsProfileDropdownOpen(false)
+                            }}
+                            className="w-full flex items-center space-x-3 px-4 py-2 text-left text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            <User className="w-4 h-4 text-gray-500" />
+                            <span>Dashboard</span>
+                          </button>
+                          
+                          <button
                             onClick={handleViewPublicProfile}
                             className="w-full flex items-center space-x-3 px-4 py-2 text-left text-gray-700 hover:bg-gray-50 transition-colors"
                           >
@@ -363,6 +395,32 @@ const Header = () => {
                       >
                         <Eye className="w-4 h-4 text-gray-500" />
                         <span>View Public Profile</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          // Navigate to appropriate dashboard based on role
+                          if (user?.role === 'guide') {
+                            navigate('/guide')
+                          } else if (user?.role === 'admin') {
+                            navigate('/admin')
+                          } else if (user?.role === 'staff') {
+                            navigate('/staff')
+                          } else if (user?.role === 'hotel_owner') {
+                            navigate('/hotel-owner')
+                          } else if (user?.role === 'driver') {
+                            navigate('/driver')
+                          } else if (user?.role === 'vehicle_owner') {
+                            navigate('/vehicle-owner')
+                          } else {
+                            navigate('/dashboard')
+                          }
+                          setIsMenuOpen(false)
+                        }}
+                        className="w-full flex items-center space-x-3 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                      >
+                        <User className="w-4 h-4 text-gray-500" />
+                        <span>Dashboard</span>
                       </button>
                       
                       <button

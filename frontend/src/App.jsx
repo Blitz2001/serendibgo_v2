@@ -130,6 +130,12 @@ function App() {
                     <GuideDashboard />
                   </ProtectedRoute>
                 } />
+                
+                <Route path="guide" element={
+                  <ProtectedRoute allowedRoles={['guide']}>
+                    <GuideDashboard />
+                  </ProtectedRoute>
+                } />
                 <Route path="guide-support" element={
                   <ProtectedRoute allowedRoles={['guide']}>
                     <GuideSupport />
@@ -351,6 +357,12 @@ function App() {
                   </ProtectedRoute>
                 } />
                 
+                <Route path="hotel-owner" element={
+                  <ProtectedRoute allowedRoles={['hotel_owner']}>
+                    <HotelOwnerDashboard />
+                  </ProtectedRoute>
+                } />
+                
                 <Route path="hotel-owner/hotels/:hotelId/rooms" element={
                   <ProtectedRoute allowedRoles={['hotel_owner']}>
                     <ManageRooms />
@@ -383,6 +395,12 @@ function App() {
                 } />
                 
                 <Route path="vehicle-owner/dashboard" element={
+                  <ProtectedRoute allowedRoles={['vehicle_owner']}>
+                    <VehicleOwnerDashboard />
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="vehicle-owner" element={
                   <ProtectedRoute allowedRoles={['vehicle_owner']}>
                     <VehicleOwnerDashboard />
                   </ProtectedRoute>
@@ -449,6 +467,12 @@ function App() {
         } />
 
         <Route path="driver/dashboard" element={
+          <ProtectedRoute allowedRoles={['driver']}>
+            <DriverDashboard />
+          </ProtectedRoute>
+        } />
+
+        <Route path="driver" element={
           <ProtectedRoute allowedRoles={['driver']}>
             <DriverDashboard />
           </ProtectedRoute>

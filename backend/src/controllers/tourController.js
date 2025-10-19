@@ -68,6 +68,27 @@ const getTours = asyncHandler(async (req, res) => {
   const sort = {};
   sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
+  console.log('🔍 getTours - Filter:', JSON.stringify(filter, null, 2));
+  console.log('🔍 getTours - Query params:', req.query);
+
+  // Debug: Check total tours in database (without filters)
+  const totalToursInDB = await Tour.countDocuments({});
+  console.log('🔍 getTours - Total tours in database:', totalToursInDB);
+  
+  // Debug: Check tours with isActive filter
+  const activeToursInDB = await Tour.countDocuments({ isActive: true });
+  console.log('🔍 getTours - Active tours in database:', activeToursInDB);
+  
+  // Debug: Get a sample tour to see its structure
+  const sampleTour = await Tour.findOne({});
+  console.log('🔍 getTours - Sample tour structure:', sampleTour ? {
+    id: sampleTour._id,
+    title: sampleTour.title,
+    isActive: sampleTour.isActive,
+    category: sampleTour.category,
+    createdAt: sampleTour.createdAt
+  } : 'No tours in database');
+
   // Get tours with pagination
   const tours = await Tour.find(filter)
     .populate('guide', 'firstName lastName email avatar profile')
@@ -77,6 +98,15 @@ const getTours = asyncHandler(async (req, res) => {
 
   // Get total count for pagination
   const total = await Tour.countDocuments(filter);
+
+  console.log('🔍 getTours - Found tours:', tours.length);
+  console.log('🔍 getTours - Total count:', total);
+  console.log('🔍 getTours - First tour:', tours[0] ? {
+    id: tours[0]._id,
+    title: tours[0].title,
+    isActive: tours[0].isActive,
+    category: tours[0].category
+  } : 'No tours found');
 
   res.json({
     success: true,

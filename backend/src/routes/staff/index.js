@@ -15,6 +15,8 @@ const guideRoutes = require('./guides');
 const financialRoutes = require('./financial');
 const supportRoutes = require('./support');
 const analyticsRoutes = require('./analytics');
+const reportRoutes = require('./reports');
+const vehicleRoutes = require('./vehicles');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -29,5 +31,7 @@ router.use('/guides', guideRoutes);
 router.use('/financial', financialRoutes);
 router.use('/support', supportRoutes);
 router.use('/analytics', analyticsRoutes);
+router.use('/reports', reportRoutes);
+router.use('/vehicles', vehicleRoutes);
 
 module.exports = router;

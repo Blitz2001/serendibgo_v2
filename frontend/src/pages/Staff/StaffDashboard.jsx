@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import staffService from '../../services/staff/staffService'
+import api from '../../services/api'
 import toast from 'react-hot-toast'
 import {
   User,
@@ -25,7 +26,6 @@ import {
   Plus,
   Trash2,
   Calendar,
-  DollarSign,
   Languages,
   Briefcase,
   FileText,
@@ -88,7 +88,6 @@ import {
   Calendar as CalendarIcon,
   MapPin as MapPinIcon,
   Users as UsersIcon,
-  DollarSign as DollarSignIcon,
   TrendingUp as TrendingUpIcon,
   BarChart3 as BarChart3Icon,
   PieChart,
@@ -132,7 +131,6 @@ import {
   CalendarIcon as CalendarIconIcon,
   MapPinIcon as MapPinIconIcon,
   UsersIcon as UsersIconIcon,
-  DollarSignIcon as DollarSignIconIcon,
   TrendingUpIcon as TrendingUpIconIcon,
   BarChart3Icon as BarChart3IconIcon,
   PieChart as PieChartIcon,
@@ -178,7 +176,6 @@ import ReviewManagement from './components/ReviewManagement'
 import AnalyticsManagement from './components/AnalyticsManagement'
 import ApprovalManagement from '../../components/staff/management/ApprovalManagement'
 import BookingManagement from '../../components/staff/management/BookingManagement'
-import FinancialManagement from '../../components/staff/management/FinancialManagement'
 
 const StaffDashboard = () => {
   const navigate = useNavigate()
@@ -202,7 +199,6 @@ const StaffDashboard = () => {
     pendingApprovals: 0,
     totalUsers: 0,
     activeBookings: 0,
-    totalRevenue: 0,
     pendingReviews: 0,
     supportTickets: 0,
     newGuides: 0,
@@ -247,7 +243,6 @@ const StaffDashboard = () => {
             pendingApprovals: data.pendingApprovals || 0,
             totalUsers: data.totalUsers || 0,
             activeBookings: data.activeBookings || 0,
-            totalRevenue: data.totalRevenue || 0,
             pendingReviews: data.pendingReviews || 0,
             supportTickets: data.supportTickets || 0,
             newGuides: data.newGuides || 0,
@@ -293,11 +288,70 @@ const StaffDashboard = () => {
     }
   }
 
+  // PDF Report generation
+  const handleGeneratePDFReport = async (reportType = 'overview', period = '30d') => {
+    try {
+      toast.loading('Generating PDF report...', { id: 'pdf-report' });
+      
+      const response = await api.post('/staff/reports/generate', {
+        reportType,
+        period
+      });
+
+      if (response.data.success && response.data.data) {
+        console.log('Response data type:', typeof response.data.data);
+        console.log('Response data length:', response.data.data.length);
+        console.log('First 100 chars:', response.data.data.substring(0, 100));
+        
+        try {
+          // Convert base64 to blob using a more robust method
+          const base64Data = response.data.data;
+          
+          // Remove any whitespace or newlines
+          const cleanBase64 = base64Data.replace(/\s/g, '');
+          
+          // Convert base64 to binary string
+          const binaryString = atob(cleanBase64);
+          
+          // Convert binary string to Uint8Array
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          // Create blob
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          
+          console.log('Blob created successfully, size:', blob.size);
+          
+          // Create download link
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = response.data.filename || `staff-report-${new Date().toISOString().split('T')[0]}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+
+          toast.success('PDF report generated successfully!', { id: 'pdf-report' });
+        } catch (decodeError) {
+          console.error('Error decoding base64 data:', decodeError);
+          throw new Error('Failed to decode PDF data: ' + decodeError.message);
+        }
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error generating PDF report:', error);
+      toast.error('Failed to generate PDF report', { id: 'pdf-report' });
+    }
+  };
+
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Home },
     { id: 'approvals', label: 'Approvals', icon: CheckCircle },
     { id: 'bookings', label: 'Bookings', icon: Calendar },
-    { id: 'financial', label: 'Financial', icon: DollarSign },
     { id: 'trips', label: 'Trip Management', icon: Map },
     { id: 'custom-trips', label: 'Custom Trips', icon: Compass },
     { id: 'drivers', label: 'Driver Management', icon: UserCheck },
@@ -347,7 +401,7 @@ const StaffDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-cyan-50">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 shadow-sm">
+      <div className="bg-white border-b border-slate-200 shadow-sm fixed top-0 left-0 right-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -438,11 +492,11 @@ const StaffDashboard = () => {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 sticky top-8">
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 sticky top-24">
               <nav className="space-y-2">
                 {tabs.map((tab) => {
                   const Icon = tab.icon
@@ -481,8 +535,17 @@ const StaffDashboard = () => {
                         Manage and oversee the SerendibGo platform operations
                       </p>
                     </div>
-                    <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center">
-                      <Shield className="h-10 w-10 text-white" />
+                    <div className="flex items-center space-x-4">
+                      <button
+                        onClick={() => handleGeneratePDFReport('overview', '30d')}
+                        className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        <span>Generate Report</span>
+                      </button>
+                      <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center">
+                        <Shield className="h-10 w-10 text-white" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -538,23 +601,6 @@ const StaffDashboard = () => {
                     </div>
                     <h3 className="font-semibold text-slate-900 mb-1">Active Bookings</h3>
                     <p className="text-sm text-slate-600">Current reservations</p>
-                  </div>
-
-                  <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                        <DollarSign className="h-6 w-6 text-purple-600" />
-                      </div>
-                      <span className="text-2xl font-bold text-slate-900">
-                        {dashboardLoading ? (
-                          <div className="w-16 h-6 bg-slate-200 rounded animate-pulse"></div>
-                        ) : (
-                          `LKR ${staffStats.totalRevenue.toLocaleString()}`
-                        )}
-                      </span>
-                    </div>
-                    <h3 className="font-semibold text-slate-900 mb-1">Total Revenue</h3>
-                    <p className="text-sm text-slate-600">Platform earnings</p>
                   </div>
                 </div>
 
@@ -798,19 +844,7 @@ const StaffDashboard = () => {
                     <h2 className="text-2xl font-bold text-slate-900">Performance Overview</h2>
                   </div>
                   
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Revenue Chart Placeholder */}
-                    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-200">
-                      <h3 className="text-lg font-semibold text-slate-900 mb-4">Revenue Trend</h3>
-                      <div className="h-48 bg-white rounded-lg flex items-center justify-center border border-slate-200">
-                        <div className="text-center">
-                          <BarChart3 className="h-12 w-12 text-slate-400 mx-auto mb-2" />
-                          <p className="text-slate-500">Chart will be implemented</p>
-                          <p className="text-sm text-slate-400">Revenue analytics coming soon</p>
-                        </div>
-                      </div>
-                    </div>
-
+                  <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
                     {/* User Growth Chart Placeholder */}
                     <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
                       <h3 className="text-lg font-semibold text-slate-900 mb-4">User Growth</h3>
@@ -820,6 +854,146 @@ const StaffDashboard = () => {
                           <p className="text-slate-500">Chart will be implemented</p>
                           <p className="text-sm text-slate-400">User analytics coming soon</p>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Report Generation Section */}
+                <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
+                  <div className="mb-6">
+                    <h3 className="text-2xl font-bold text-slate-900 mb-2">Generate Reports</h3>
+                    <p className="text-slate-600">Create comprehensive PDF reports for different aspects of your operations</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Overview Report */}
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+                          <BarChart3 className="h-6 w-6 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-blue-600">Overview</span>
+                      </div>
+                      <h4 className="font-semibold text-slate-900 mb-2">Overview Report</h4>
+                      <p className="text-sm text-slate-600 mb-4">Complete performance summary with key metrics and trends</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('overview', '30d')}
+                          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('overview', '90d')}
+                          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Approvals Report */}
+                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-6 border border-orange-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center">
+                          <CheckCircle className="h-6 w-6 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-orange-600">Approvals</span>
+                      </div>
+                      <h4 className="font-semibold text-slate-900 mb-2">Approvals Report</h4>
+                      <p className="text-sm text-slate-600 mb-4">Detailed analysis of approval processes and processing times</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('approvals', '30d')}
+                          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('approvals', '90d')}
+                          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Bookings Report */}
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
+                          <Calendar className="h-6 w-6 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-green-600">Bookings</span>
+                      </div>
+                      <h4 className="font-semibold text-slate-900 mb-2">Bookings Report</h4>
+                      <p className="text-sm text-slate-600 mb-4">Comprehensive booking analysis and customer insights</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('bookings', '30d')}
+                          className="flex-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('bookings', '90d')}
+                          className="flex-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Support Report */}
+                    <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-6 border border-red-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center">
+                          <Headphones className="h-6 w-6 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-red-600">Support</span>
+                      </div>
+                      <h4 className="font-semibold text-slate-900 mb-2">Support Report</h4>
+                      <p className="text-sm text-slate-600 mb-4">Customer support metrics and ticket resolution analysis</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('support', '30d')}
+                          className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('support', '90d')}
+                          className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Performance Report */}
+                    <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-6 border border-indigo-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-12 h-12 bg-indigo-500 rounded-lg flex items-center justify-center">
+                          <Activity className="h-6 w-6 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-indigo-600">Performance</span>
+                      </div>
+                      <h4 className="font-semibold text-slate-900 mb-2">Performance Report</h4>
+                      <p className="text-sm text-slate-600 mb-4">Staff performance metrics and productivity analysis</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleGeneratePDFReport('performance', '30d')}
+                          className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          30 Days
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePDFReport('performance', '90d')}
+                          className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          90 Days
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -838,13 +1012,6 @@ const StaffDashboard = () => {
             {activeTab === 'bookings' && (
               <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
                 <BookingManagement />
-              </div>
-            )}
-
-            {/* Financial Management Tab */}
-            {activeTab === 'financial' && (
-              <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
-                <FinancialManagement />
               </div>
             )}
 
@@ -905,7 +1072,7 @@ const StaffDashboard = () => {
             )}
 
             {/* Other tabs will be implemented in separate components */}
-            {activeTab !== 'overview' && activeTab !== 'approvals' && activeTab !== 'bookings' && activeTab !== 'financial' && activeTab !== 'trips' && activeTab !== 'custom-trips' && activeTab !== 'hotels' && activeTab !== 'guides' && activeTab !== 'drivers' && activeTab !== 'support' && activeTab !== 'reviews' && activeTab !== 'analytics' && (
+            {activeTab !== 'overview' && activeTab !== 'approvals' && activeTab !== 'bookings' && activeTab !== 'trips' && activeTab !== 'custom-trips' && activeTab !== 'hotels' && activeTab !== 'guides' && activeTab !== 'drivers' && activeTab !== 'support' && activeTab !== 'reviews' && activeTab !== 'analytics' && (
               <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
                 <div className="text-center py-12">
                   <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">

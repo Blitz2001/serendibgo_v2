@@ -1,11 +1,14 @@
 // Staff Service - API calls for staff operations
 class StaffService {
   constructor() {
-    this.baseURL = '/api/staff';
+    this.baseURL = `${import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api'}/staff`;
   }
 
   getHeaders() {
     const token = localStorage.getItem('token');
+    console.log('🔑 staffService.getHeaders - Token:', token ? 'Present' : 'Missing');
+    console.log('🔑 staffService.getHeaders - Token length:', token ? token.length : 0);
+    console.log('🔑 staffService.getHeaders - Token preview:', token ? token.substring(0, 20) + '...' : 'None');
     return {
       'Content-Type': 'application/json',
       'Authorization': token ? `Bearer ${token}` : ''
@@ -16,6 +19,26 @@ class StaffService {
     const data = await response.json();
     
     if (!response.ok) {
+      console.error('❌ API Error Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: data
+      });
+      
+      // Handle validation errors with specific details
+      if (data.errors && Array.isArray(data.errors)) {
+        throw new Error(`Validation error: ${data.errors.join(', ')}`);
+      }
+      
+      // Provide more detailed error messages
+      if (response.status === 400) {
+        throw new Error(data.message || 'Bad request - please check your input');
+      } else if (response.status === 404) {
+        throw new Error(data.message || 'Resource not found');
+      } else if (response.status === 500) {
+        throw new Error(data.message || 'Server error - please try again later');
+      }
+      
       throw new Error(data.message || 'Request failed');
     }
     
@@ -251,11 +274,15 @@ class StaffService {
   }
 
   async updateVehicleStatus(vehicleId, action, reason = '') {
+    console.log('🚀 updateVehicleStatus called:', { vehicleId, action, reason });
+    
     const response = await fetch(`${this.baseURL}/vehicles/${vehicleId}/status`, {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify({ action, reason }),
     });
+    
+    console.log('🚀 updateVehicleStatus response:', response.status, response.statusText);
     
     return this.handleResponse(response);
   }
@@ -457,11 +484,23 @@ class StaffService {
   }
 
   async createTrip(tripData) {
+    console.log('🚀 staffService.createTrip called with data:', tripData);
+    const headers = this.getHeaders();
+    console.log('🚀 staffService.createTrip headers:', headers);
+    
     const response = await fetch(`${this.baseURL}/trips`, {
       method: 'POST',
-      headers: this.getHeaders(),
+      headers: headers,
       body: JSON.stringify(tripData),
     });
+    
+    console.log('🚀 staffService.createTrip response status:', response.status);
+    console.log('🚀 staffService.createTrip response ok:', response.ok);
+    
+    // Log response body for debugging
+    const responseClone = response.clone();
+    const responseData = await responseClone.json();
+    console.log('🚀 staffService.createTrip response data:', responseData);
     
     return this.handleResponse(response);
   }
@@ -608,6 +647,33 @@ class StaffService {
     const queryParams = new URLSearchParams(params);
     const response = await fetch(`${this.baseURL}/support/reviews?${queryParams}`, {
       headers: this.getHeaders(),
+    });
+    
+    return this.handleResponse(response);
+  }
+
+  async getReviewStatistics() {
+    const response = await fetch(`${this.baseURL}/support/reviews/statistics`, {
+      headers: this.getHeaders(),
+    });
+    
+    return this.handleResponse(response);
+  }
+
+  async deleteReview(reviewId) {
+    const response = await fetch(`${this.baseURL}/support/reviews/${reviewId}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    });
+    
+    return this.handleResponse(response);
+  }
+
+  async bulkReviewAction(reviewIds, action) {
+    const response = await fetch(`${this.baseURL}/support/reviews/bulk-action`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ reviewIds, action }),
     });
     
     return this.handleResponse(response);

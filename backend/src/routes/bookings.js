@@ -8,7 +8,9 @@ const {
   cancelBooking,
   getGuideBookings,
   createGuideBooking,
-  createGuestGuideBooking
+  createGuestGuideBooking,
+  downloadBookingPDF,
+  sendConfirmationEmail
 } = require('../controllers/bookingController');
 const { protect } = require('../middleware/auth');
 
@@ -60,5 +62,15 @@ router.put('/:id/status', updateBookingStatus);
 // @desc    Cancel booking
 // @access  Private
 router.put('/:id/cancel', cancelBooking);
+
+// @route   GET /api/bookings/:id/download-pdf
+// @desc    Download booking confirmation PDF
+// @access  Private
+router.get('/:id/download-pdf', downloadBookingPDF);
+
+// @route   POST /api/bookings/:id/send-confirmation-email
+// @desc    Send booking confirmation email
+// @access  Private
+router.post('/:id/send-confirmation-email', sendConfirmationEmail);
 
 module.exports = router;
