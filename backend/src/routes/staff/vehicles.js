@@ -23,3 +23,4 @@ router.post('/:id/approve', approveVehicle);
 router.post('/:id/reject', rejectVehicle);
 
 module.exports = router;
+
