@@ -4,7 +4,8 @@ const {
   getAllReviews,
   getReviewStatistics,
   updateReviewStatus,
-  deleteReview
+  deleteReview,
+  exportReviewsToPDF
 } = require('../../controllers/admin/adminReviewController');
 const { protect } = require('../../middleware/auth');
 
@@ -30,5 +31,10 @@ router.put('/:reviewId/status', updateReviewStatus);
 // @desc    Delete review (admin only)
 // @access  Private (Admin only)
 router.delete('/:reviewId', deleteReview);
+
+// @route   POST /api/admin/reviews/export
+// @desc    Export reviews to PDF
+// @access  Private (Admin only)
+router.post('/export', exportReviewsToPDF);
 
 module.exports = router;

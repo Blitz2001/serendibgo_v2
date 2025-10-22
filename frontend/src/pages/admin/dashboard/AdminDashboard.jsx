@@ -1213,6 +1213,51 @@ const AdminDashboard = () => {
     }
   };
 
+  // Reviews PDF export function
+  const handleExportReviewsPDF = async () => {
+    try {
+      toast.loading('Generating reviews PDF...', { id: 'reviews-pdf' });
+      
+      const response = await api.post('/admin/reviews/export');
+
+      if (response.data.success && response.data.data) {
+        try {
+          // Convert base64 to blob
+          const base64Data = response.data.data;
+          const cleanBase64 = base64Data.replace(/\s/g, '');
+          const binaryString = atob(cleanBase64);
+          
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          
+          // Create download link
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = response.data.filename || `serendibgo-reviews-${new Date().toISOString().split('T')[0]}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+
+          toast.success('Reviews PDF exported successfully!', { id: 'reviews-pdf' });
+        } catch (decodeError) {
+          console.error('Error decoding reviews PDF data:', decodeError);
+          throw new Error('Failed to decode PDF data: ' + decodeError.message);
+        }
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error exporting reviews PDF:', error);
+      toast.error('Failed to export reviews PDF', { id: 'reviews-pdf' });
+    }
+  };
+
   // Fetch data when tabs are active
   useEffect(() => {
     console.log('Active tab changed to:', activeTab);
@@ -2543,7 +2588,7 @@ const AdminDashboard = () => {
                     </div>
                     <div className="flex space-x-3">
                       <button 
-                        onClick={() => handleGeneratePDFReport('reviews', '30d')}
+                        onClick={handleExportReviewsPDF}
                         className="flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors"
                       >
                         <FileText className="h-5 w-5 mr-2" />

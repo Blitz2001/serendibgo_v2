@@ -65,7 +65,8 @@ const {
   getAllReviews,
   getReviewStatistics,
   updateReviewStatus,
-  deleteReview
+  deleteReview,
+  exportReviewsToPDF
 } = require('../controllers/admin/adminReviewController');
 
 const router = express.Router();
@@ -204,6 +205,7 @@ router.get('/reviews', asyncHandler(getAllReviews));
 router.get('/reviews/stats', asyncHandler(getReviewStatistics));
 router.put('/reviews/:reviewId/status', asyncHandler(updateReviewStatus));
 router.delete('/reviews/:reviewId', asyncHandler(deleteReview));
+router.post('/reviews/export', asyncHandler(exportReviewsToPDF));
 
 module.exports = router;
 
