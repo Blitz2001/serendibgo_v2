@@ -804,6 +804,128 @@ const deleteCustomTrip = async (req, res) => {
   }
 };
 
+// @desc    Create a new custom trip booking (confirmed booking)
+// @route   POST /api/custom-trips/book
+// @access  Private
+const createCustomTripBooking = async (req, res) => {
+  try {
+    const {
+      destination,
+      destinations,
+      startDate,
+      endDate,
+      groupSize,
+      budget,
+      interests,
+      accommodation,
+      transport,
+      activities,
+      specialRequests,
+      dietaryRequirements,
+      accessibility,
+      contactInfo,
+      paymentStatus = 'paid',
+      status = 'confirmed'
+    } = req.body;
+
+    const userId = req.user._id;
+
+    console.log('Creating custom trip booking for user:', userId);
+
+    // Validate dates
+    if (new Date(startDate) >= new Date(endDate)) {
+      return res.status(400).json({
+        success: false,
+        message: 'End date must be after start date'
+      });
+    }
+
+    // Calculate duration
+    const duration = Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24));
+
+    // Create the custom trip booking
+    const customTrip = await CustomTrip.create({
+      customer: userId,
+      customerName: req.user.firstName + ' ' + req.user.lastName,
+      customerEmail: req.user.email,
+      customerPhone: req.user.phone,
+      requestDetails: {
+        destination: destination || 'Multiple Cities',
+        destinations: destinations || [destination],
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        duration: duration,
+        groupSize: groupSize || 2,
+        budget: budget || 'mid-range',
+        budgetAmount: budget === 'budget' ? 30000 : budget === 'luxury' ? 100000 : 50000,
+        interests: interests || ['culture', 'nature'],
+        activities: activities || [],
+        accommodation: accommodation || 'mid-range',
+        transport: transport || ['private-car'],
+        specialRequests: specialRequests || '',
+        dietaryRequirements: dietaryRequirements || '',
+        accessibility: accessibility || '',
+        contactInfo: {
+          name: req.user.firstName + ' ' + req.user.lastName,
+          email: req.user.email,
+          phone: req.user.phone || ''
+        }
+      },
+      title: `Custom Trip to ${destination || 'Sri Lanka'}`,
+      description: `Personalized ${duration}-day adventure across ${destination || 'Sri Lanka'}`,
+      status: status,
+      paymentStatus: paymentStatus,
+      approvalDetails: {
+        status: 'auto-approved',
+        approvedBy: userId,
+        approvedAt: new Date(),
+        notes: 'Automatically approved booking'
+      }
+    });
+
+    // Create a linked booking record
+    const booking = await Booking.create({
+      user: userId,
+      customTrip: customTrip._id,
+      bookingDate: new Date(),
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      duration: 'multi-day',
+      groupSize: groupSize || 2,
+      totalAmount: customTrip.requestDetails.budgetAmount,
+      status: status,
+      paymentStatus: paymentStatus,
+      specialRequests: specialRequests || ''
+    });
+
+    // Update custom trip with booking reference
+    customTrip.booking = booking._id;
+    await customTrip.save();
+
+    // Populate the response
+    await customTrip.populate('customer', 'firstName lastName email phone');
+
+    console.log('Custom trip booking created successfully:', customTrip._id);
+
+    res.status(201).json({
+      success: true,
+      message: 'Custom trip booking created successfully',
+      data: {
+        customTrip: customTrip,
+        booking: booking
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating custom trip booking:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create custom trip booking',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createCustomTrip,
   getAllCustomTrips,
@@ -813,5 +935,6 @@ module.exports = {
   rejectCustomTrip,
   confirmCustomTrip,
   getUserCustomTrips,
-  deleteCustomTrip
+  deleteCustomTrip,
+  createCustomTripBooking
 };

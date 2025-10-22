@@ -66,6 +66,7 @@ import StaffManagement from './pages/admin/staff/StaffManagement'
 import AnalyticsDashboard from './pages/admin/analytics/AnalyticsDashboard'
 import AdminVehicleManagement from './pages/admin/vehicles/AdminVehicleManagement'
 import NotificationManagement from './pages/notifications/NotificationManagement'
+import AdminReviews from './pages/admin/AdminReviews'
 import EarningsDashboard from './pages/earnings/EarningsDashboard'
 import PricingManagement from './pages/pricing/PricingManagement'
 import HotelOwnerRegistration from './pages/hotels/HotelOwnerRegistration'
@@ -218,6 +219,11 @@ function App() {
                 <Route path="admin/vehicles" element={
                   <ProtectedRoute allowedRoles={['admin']}>
                     <AdminVehicleManagement />
+                  </ProtectedRoute>
+                } />
+                <Route path="admin/reviews" element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <AdminReviews />
                   </ProtectedRoute>
                 } />
                 <Route path="admin/settings" element={

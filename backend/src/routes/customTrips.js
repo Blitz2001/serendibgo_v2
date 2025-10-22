@@ -9,7 +9,8 @@ const {
   rejectCustomTrip,
   confirmCustomTrip,
   getUserCustomTrips,
-  deleteCustomTrip
+  deleteCustomTrip,
+  createCustomTripBooking
 } = require('../controllers/customTripController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -18,6 +19,7 @@ router.use(protect);
 
 // User routes
 router.post('/', createCustomTrip);
+router.post('/book', createCustomTripBooking);
 
 // User routes
 router.get('/user/my-trips', getUserCustomTrips);

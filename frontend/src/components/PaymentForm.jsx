@@ -10,6 +10,15 @@ const PaymentForm = ({ bookingData, onPaymentSuccess, onPaymentError, onRetry })
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Debug the bookingData received
+  console.log('PaymentForm received bookingData:', {
+    bookingId: bookingData?.bookingId,
+    isGuestPayment: bookingData?.isGuestPayment,
+    clientSecret: bookingData?.clientSecret,
+    allKeys: Object.keys(bookingData || {}),
+    fullData: bookingData
+  });
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -56,7 +65,8 @@ const PaymentForm = ({ bookingData, onPaymentSuccess, onPaymentError, onRetry })
           console.log('Payment succeeded, confirming payment...', {
             paymentIntentId: paymentIntent.id,
             isGuestPayment: bookingData.isGuestPayment,
-            bookingId: bookingData.bookingId
+            bookingId: bookingData.bookingId,
+            bookingDataKeys: Object.keys(bookingData)
           });
           
           // Use the isGuestPayment flag to determine which endpoint to use

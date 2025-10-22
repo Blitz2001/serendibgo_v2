@@ -242,9 +242,13 @@ const RoomDetails = () => {
       return;
     }
 
+    if (!bookingDates.guests || bookingDates.guests < 1) {
+      toast.error('Please select number of guests');
+      return;
+    }
+
     if (!user) {
-      toast.error('Please login to make a booking');
-      navigate('/login');
+      toast.error('Please sign in to make a booking');
       return;
     }
 
@@ -266,7 +270,7 @@ const RoomDetails = () => {
         checkOutDate: bookingDates.checkOut,
         numberOfRooms: 1,
         guests: {
-          adults: bookingDates.guests,
+          adults: bookingDates.guests || 1, // Ensure adults is always a number
           children: 0,
           infants: 0
         },
@@ -280,6 +284,8 @@ const RoomDetails = () => {
       };
 
       console.log('Booking payload:', bookingPayload);
+      console.log('User data:', user);
+      console.log('Booking dates:', bookingDates);
 
       // Create the booking using the authenticated API service
       const result = await bookingAPI.createBooking(bookingPayload);

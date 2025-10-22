@@ -60,6 +60,14 @@ const {
   exportVehicles
 } = require('../controllers/admin/vehicleController');
 
+// Import admin review controller
+const {
+  getAllReviews,
+  getReviewStatistics,
+  updateReviewStatus,
+  deleteReview
+} = require('../controllers/admin/adminReviewController');
+
 const router = express.Router();
 
 // All admin routes require authentication and admin role
@@ -190,6 +198,12 @@ router.post('/settings/reset', asyncHandler(resetSettings));
 
 // Report generation routes
 router.post('/reports/generate', asyncHandler(generatePDFReport));
+
+// Review management routes
+router.get('/reviews', asyncHandler(getAllReviews));
+router.get('/reviews/stats', asyncHandler(getReviewStatistics));
+router.put('/reviews/:reviewId/status', asyncHandler(updateReviewStatus));
+router.delete('/reviews/:reviewId', asyncHandler(deleteReview));
 
 module.exports = router;
 

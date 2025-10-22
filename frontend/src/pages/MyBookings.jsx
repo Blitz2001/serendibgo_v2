@@ -7,6 +7,8 @@ import { guideService } from '../services/guideService'
 import { toast } from 'react-hot-toast'
 import ReviewForm from '../components/reviews/ReviewForm'
 import ReviewPopup from '../components/reviews/ReviewPopup'
+import CustomTripReviewPopup from '../components/reviews/CustomTripReviewPopup'
+import customTripReviewService from '../services/customTripReviewService'
 
 const MyBookings = () => {
   const { user, isAuthenticated, token } = useAuth()
@@ -29,6 +31,8 @@ const MyBookings = () => {
   const [existingReviews, setExistingReviews] = useState([])
   const [reviewedBookings, setReviewedBookings] = useState(new Set())
   const [reviewStats, setReviewStats] = useState(null)
+  const [showCustomTripReviewPopup, setShowCustomTripReviewPopup] = useState(false)
+  const [selectedCustomTripForReview, setSelectedCustomTripForReview] = useState(null)
 
   useEffect(() => {
     if (user && isAuthenticated) {
@@ -323,7 +327,7 @@ const MyBookings = () => {
 
       // Check guide bookings
       for (const booking of guideBookings) {
-        if (booking.guide && (booking.status === 'completed' || (booking.status === 'confirmed' && booking.paymentStatus === 'paid'))) {
+        if (booking.guide && (booking.status || booking.bookingStatus || 'pending' === 'completed' || (booking.status || booking.bookingStatus || 'pending' === 'confirmed' && booking.paymentStatus === 'paid'))) {
           const guideId = booking.guide._id || booking.guide;
           const bookingId = booking._id || booking.id || booking.bookingId;
           
@@ -569,6 +573,34 @@ const MyBookings = () => {
     
     console.log('MyBookings: Setting showReviewPopup to true');
     setShowReviewPopup(true);
+  };
+
+  const handleCustomTripReviewPopup = async (trip) => {
+    try {
+      console.log('MyBookings: Opening custom trip review popup for trip:', trip.id);
+      
+      // Check if user can review this custom trip
+      const canReviewResponse = await customTripReviewService.canReviewCustomTrip(trip.id);
+      
+      if (canReviewResponse.success && canReviewResponse.data.canReview) {
+        setSelectedCustomTripForReview({
+          id: trip.id,
+          title: trip.title,
+          destination: trip.location,
+          duration: trip.customTripDetails?.duration || trip.duration,
+          groupSize: trip.groupSize,
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+          ...trip
+        });
+        setShowCustomTripReviewPopup(true);
+      } else {
+        toast.error(canReviewResponse.data?.reason || 'You cannot review this custom trip');
+      }
+    } catch (error) {
+      console.error('Error checking review eligibility:', error);
+      toast.error('Failed to check review eligibility');
+    }
   };
 
   const handleReviewPopupSubmit = async (reviewData) => {
@@ -1101,9 +1133,9 @@ const MyBookings = () => {
                           </div>
                           <div className="ml-6 flex flex-col items-end">
                             <div className="flex flex-col items-end space-y-2">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                                {getStatusIcon(booking.status)}
-                                <span className="ml-1">{booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}</span>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status || booking.bookingStatus || 'pending')}`}>
+                                {getStatusIcon(booking.status || booking.bookingStatus || 'pending')}
+                                <span className="ml-1">{(booking.status || booking.bookingStatus || 'pending').charAt(0).toUpperCase() + (booking.status || booking.bookingStatus || 'pending').slice(1)}</span>
                               </span>
                               {booking.paymentStatus && (
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -1114,7 +1146,7 @@ const MyBookings = () => {
                                     : 'bg-red-100 text-red-800'
                                 }`}>
                                   <CreditCard className="h-3 w-3 mr-1" />
-                                  <span className="ml-1">{booking.paymentStatus.charAt(0).toUpperCase() + booking.paymentStatus.slice(1)}</span>
+                                  <span className="ml-1">{(booking.paymentStatus || 'pending').charAt(0).toUpperCase() + (booking.paymentStatus || 'pending').slice(1)}</span>
                                 </span>
                               )}
                             </div>
@@ -1146,12 +1178,12 @@ const MyBookings = () => {
                               Review Submitted
                             </div>
                           )}
-                          {booking.status === 'pending' && (
+                          {booking.status || booking.bookingStatus || 'pending' === 'pending' && (
                             <button className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                               Cancel
                             </button>
                           )}
-                          {booking.status === 'confirmed' && booking.paymentStatus === 'pending' && (
+                          {booking.status || booking.bookingStatus || 'pending' === 'confirmed' && booking.paymentStatus === 'pending' && (
                             <button 
                               onClick={() => handleConfirmHotelBooking(booking)}
                               className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
@@ -1194,9 +1226,9 @@ const MyBookings = () => {
                             <div className="flex items-center space-x-2 mb-2">
                               <Calendar className="h-5 w-5 text-blue-600" />
                               <h3 className="text-lg font-medium text-gray-900">{booking.title}</h3>
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                                {getStatusIcon(booking.status)}
-                                <span className="ml-1">{booking.status}</span>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status || booking.bookingStatus || 'pending')}`}>
+                                {getStatusIcon(booking.status || booking.bookingStatus || 'pending')}
+                                <span className="ml-1">{booking.status || booking.bookingStatus || 'pending'}</span>
                               </span>
                             </div>
                             <p className="text-sm text-gray-600 mb-3">{booking.description}</p>
@@ -1235,9 +1267,9 @@ const MyBookings = () => {
                           </div>
                           <div className="ml-6 flex flex-col items-end">
                             <div className="flex flex-col items-end space-y-2">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                                {getStatusIcon(booking.status)}
-                                <span className="ml-1">{booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}</span>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status || booking.bookingStatus || 'pending')}`}>
+                                {getStatusIcon(booking.status || booking.bookingStatus || 'pending')}
+                                <span className="ml-1">{(booking.status || booking.bookingStatus || 'pending').charAt(0).toUpperCase() + (booking.status || booking.bookingStatus || 'pending').slice(1)}</span>
                               </span>
                               {booking.paymentStatus && (
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -1248,7 +1280,7 @@ const MyBookings = () => {
                                     : 'bg-red-100 text-red-800'
                                 }`}>
                                   <CreditCard className="h-3 w-3 mr-1" />
-                                  <span className="ml-1">{booking.paymentStatus.charAt(0).toUpperCase() + booking.paymentStatus.slice(1)}</span>
+                                  <span className="ml-1">{(booking.paymentStatus || 'pending').charAt(0).toUpperCase() + (booking.paymentStatus || 'pending').slice(1)}</span>
                                 </span>
                               )}
                             </div>
@@ -1269,12 +1301,12 @@ const MyBookings = () => {
                             <Eye className="h-4 w-4 mr-1" />
                             View Details
                           </button>
-                          {booking.status === 'pending' && (
+                          {booking.status || booking.bookingStatus || 'pending' === 'pending' && (
                             <button className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                               Cancel
                             </button>
                           )}
-                          {booking.status === 'confirmed' && booking.paymentStatus === 'pending' && (
+                          {booking.status || booking.bookingStatus || 'pending' === 'confirmed' && booking.paymentStatus === 'pending' && (
                             <button 
                               onClick={() => handleConfirmTourBooking(booking)}
                               className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
@@ -1283,7 +1315,7 @@ const MyBookings = () => {
                               Pay Now
                             </button>
                           )}
-                          {booking.status === 'completed' && (
+                          {booking.status || booking.bookingStatus || 'pending' === 'completed' && (
                             <button 
                               onClick={() => handleWriteReview(booking)}
                               className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
@@ -1372,7 +1404,7 @@ const MyBookings = () => {
                             <div className="flex flex-col items-end space-y-2">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(trip.status)}`}>
                                 {getStatusIcon(trip.status)}
-                                <span className="ml-1">{trip.status.charAt(0).toUpperCase() + trip.status.slice(1)}</span>
+                                <span className="ml-1">{(trip.status || 'pending').charAt(0).toUpperCase() + (trip.status || 'pending').slice(1)}</span>
                               </span>
                               {trip.paymentStatus && (
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -1383,7 +1415,7 @@ const MyBookings = () => {
                                     : 'bg-red-100 text-red-800'
                                 }`}>
                                   <CreditCard className="h-3 w-3 mr-1" />
-                                  <span className="ml-1">{trip.paymentStatus.charAt(0).toUpperCase() + trip.paymentStatus.slice(1)}</span>
+                                  <span className="ml-1">{(trip.paymentStatus || 'pending').charAt(0).toUpperCase() + (trip.paymentStatus || 'pending').slice(1)}</span>
                                 </span>
                               )}
                             </div>
@@ -1403,7 +1435,7 @@ const MyBookings = () => {
                           </button>
                           {(trip.status === 'completed' || (trip.status === 'confirmed' && trip.paymentStatus === 'paid')) && isAuthenticated && !reviewedBookings.has(trip._id || trip.id || trip.bookingId) && (
                             <button 
-                              onClick={() => handleWriteReviewPopup({...trip, type: 'custom'})}
+                              onClick={() => handleCustomTripReviewPopup(trip)}
                               className="px-4 py-2 text-sm font-medium text-white bg-orange-500 border border-transparent rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
                             >
                               <MessageSquare className="h-4 w-4 mr-2" />
@@ -1504,7 +1536,7 @@ const MyBookings = () => {
                           <div className="ml-6 flex flex-col items-end">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.bookingStatus)}`}>
                               {getStatusIcon(booking.bookingStatus)}
-                              <span className="ml-1">{booking.bookingStatus.charAt(0).toUpperCase() + booking.bookingStatus.slice(1)}</span>
+                              <span className="ml-1">{(booking.bookingStatus || 'pending').charAt(0).toUpperCase() + (booking.bookingStatus || 'pending').slice(1)}</span>
                             </span>
                             <div className="mt-2 flex items-center text-lg font-semibold text-gray-900">
                               <CreditCard className="h-4 w-4 mr-1" />
@@ -1624,9 +1656,9 @@ const MyBookings = () => {
                             )}
                           </div>
                           <div className="ml-6 flex flex-col items-end">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                              {getStatusIcon(booking.status)}
-                              <span className="ml-1">{booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}</span>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status || booking.bookingStatus || 'pending')}`}>
+                              {getStatusIcon(booking.status || booking.bookingStatus || 'pending')}
+                              <span className="ml-1">{(booking.status || booking.bookingStatus || 'pending').charAt(0).toUpperCase() + (booking.status || booking.bookingStatus || 'pending').slice(1)}</span>
                             </span>
                             <div className="mt-2 flex items-center text-lg font-semibold text-gray-900">
                               <CreditCard className="h-4 w-4 mr-1" />
@@ -1645,7 +1677,7 @@ const MyBookings = () => {
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </button>
-                          {(booking.status === 'completed' || (booking.status === 'confirmed' && booking.paymentStatus === 'paid')) && isAuthenticated && !reviewedBookings.has(booking._id || booking.id || booking.bookingId) && (
+                          {(booking.status || booking.bookingStatus || 'pending' === 'completed' || (booking.status || booking.bookingStatus || 'pending' === 'confirmed' && booking.paymentStatus === 'paid')) && isAuthenticated && !reviewedBookings.has(booking._id || booking.id || booking.bookingId) && (
                             <button 
                               onClick={() => handleWriteReviewPopup({...booking, type: 'guide'})}
                               className="px-4 py-2 text-sm font-medium text-white bg-orange-500 border border-transparent rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
@@ -1654,18 +1686,18 @@ const MyBookings = () => {
                               Write Review
                             </button>
                           )}
-                          {(booking.status === 'completed' || (booking.status === 'confirmed' && booking.paymentStatus === 'paid')) && isAuthenticated && reviewedBookings.has(booking._id || booking.id || booking.bookingId) && (
+                          {(booking.status || booking.bookingStatus || 'pending' === 'completed' || (booking.status || booking.bookingStatus || 'pending' === 'confirmed' && booking.paymentStatus === 'paid')) && isAuthenticated && reviewedBookings.has(booking._id || booking.id || booking.bookingId) && (
                             <div className="px-4 py-2 text-sm font-medium text-green-600 bg-green-100 border border-green-200 rounded-md">
                               <MessageSquare className="h-4 w-4 mr-2 inline" />
                               Review Submitted
                             </div>
                           )}
-                          {booking.status === 'pending' && (
+                          {booking.status || booking.bookingStatus || 'pending' === 'pending' && (
                             <button className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                               Cancel
                             </button>
                           )}
-                          {booking.status === 'confirmed' && booking.paymentStatus === 'pending' && (
+                          {booking.status || booking.bookingStatus || 'pending' === 'confirmed' && booking.paymentStatus === 'pending' && (
                             <button className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
                               <CreditCard className="h-4 w-4 mr-2" />
                               Pay Now
@@ -2425,6 +2457,25 @@ const MyBookings = () => {
         reviewStats={reviewStats}
         userInfo={user}
       />
+
+      {/* Custom Trip Review Popup */}
+      {showCustomTripReviewPopup && selectedCustomTripForReview && (
+        <CustomTripReviewPopup
+          customTripId={selectedCustomTripForReview.id}
+          customTripData={selectedCustomTripForReview}
+          onClose={() => {
+            setShowCustomTripReviewPopup(false);
+            setSelectedCustomTripForReview(null);
+          }}
+          onSubmit={() => {
+            setShowCustomTripReviewPopup(false);
+            setSelectedCustomTripForReview(null);
+            // Refresh bookings to update review status
+            fetchBookings();
+          }}
+        />
+      )}
+
       <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
         <h3 className="text-sm font-medium text-yellow-800">Debug Authentication Status:</h3>
         <p className="text-xs text-yellow-700">Is Authenticated: {isAuthenticated ? 'Yes' : 'No'}</p>

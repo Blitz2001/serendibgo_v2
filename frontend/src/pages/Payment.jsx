@@ -97,6 +97,7 @@ const Payment = () => {
         } catch (authError) {
           console.warn('Authenticated payment failed, falling back to guest payment:', authError.response?.status)
           console.log('Auth error details:', authError.response?.data)
+          console.log('Auth error message:', authError.message)
           
           // If authenticated payment fails (403, 401, 400), fall back to guest payment
           if (authError.response?.status === 403 || authError.response?.status === 401 || authError.response?.status === 400) {
@@ -111,14 +112,23 @@ const Payment = () => {
               }
             )
             // Mark this as a guest payment for the PaymentForm
+            console.log('Setting isGuestPayment to true due to auth failure');
             setPaymentData(prev => ({ ...prev, isGuestPayment: true }))
+            console.log('Updated paymentData with isGuestPayment:', { ...paymentData, isGuestPayment: true })
           } else {
             throw authError
           }
         }
       } else {
         // Use guest payment endpoint
-        console.log('Using guest payment endpoint')
+        console.log('Using guest payment endpoint from start')
+        console.log('Guest payment data:', {
+          amount: bookingData.amount,
+          currency: bookingData.currency,
+          bookingId: bookingData.bookingId,
+          customerEmail: bookingData.customerEmail || 'guest@example.com',
+          customerName: bookingData.customerName || 'Guest User'
+        })
         response = await paymentService.createGuestPaymentIntent(
           bookingData.amount,
           bookingData.currency,
@@ -128,6 +138,9 @@ const Payment = () => {
             customerName: bookingData.customerName || 'Guest User'
           }
         )
+        // Mark this as a guest payment for the PaymentForm
+        console.log('Setting isGuestPayment to true for guest payment');
+        setPaymentData(prev => ({ ...prev, isGuestPayment: true }))
       }
       
       setClientSecret(response.data.clientSecret)
@@ -471,6 +484,15 @@ const Payment = () => {
                 </div>
               ) : clientSecret ? (
                 <StripeProvider clientSecret={clientSecret}>
+                  {console.log('PaymentForm props:', {
+                    bookingId: paymentData.bookingId,
+                    isGuestPayment: paymentData.isGuestPayment || !isAuthenticated || !user,
+                    isAuthenticated,
+                    hasUser: !!user,
+                    paymentDataKeys: Object.keys(paymentData),
+                    paymentDataIsGuestPayment: paymentData.isGuestPayment,
+                    finalIsGuestPayment: paymentData.isGuestPayment || !isAuthenticated || !user
+                  })}
                   <PaymentForm
                     bookingData={{
                       bookingId: paymentData.bookingId,

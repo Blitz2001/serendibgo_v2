@@ -186,6 +186,10 @@ app.use('/api/revenue', revenueRoutes);
 // Custom trip API routes
 app.use('/api/custom-trips', customTripRoutes);
 
+// Custom trip review API routes
+const customTripReviewRoutes = require('./src/routes/customTripReviews');
+app.use('/api/custom-trip-reviews', customTripReviewRoutes);
+
 // Notification API routes
 app.use('/api/notifications', notificationRoutes);
 
