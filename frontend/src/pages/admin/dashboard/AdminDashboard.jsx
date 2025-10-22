@@ -30,7 +30,10 @@ import {
   Mail,
   Phone,
   X,
-  XCircle
+  XCircle,
+  Filter,
+  MapPin,
+  Car
 } from 'lucide-react';
 import AdminStats from '../../../components/admin/dashboard/AdminStats';
 import staffService from '../../../services/admin/staffService';
@@ -47,6 +50,20 @@ const AdminDashboard = () => {
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+
+  // Review management state
+  const [reviews, setReviews] = useState([]);
+  const [reviewStats, setReviewStats] = useState(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewPagination, setReviewPagination] = useState(null);
+  const [reviewFilters, setReviewFilters] = useState({
+    search: '',
+    type: 'all',
+    rating: 'all',
+    sortBy: 'newest'
+  });
+  const [reviewCurrentPage, setReviewCurrentPage] = useState(1);
+  const [showReviewFilters, setShowReviewFilters] = useState(false);
 
   // User management state
   const [users, setUsers] = useState([]);
@@ -125,7 +142,23 @@ const AdminDashboard = () => {
     fetchPermissionsData();
     fetchAnalyticsData();
     fetchSettingsData();
+    fetchReviewStats();
   }, []);
+
+  // Fetch reviews data when reviews tab becomes active
+  useEffect(() => {
+    if (activeTab === 'reviews') {
+      fetchReviews();
+      fetchReviewStats();
+    }
+  }, [activeTab]);
+
+  // Refetch reviews when filters change
+  useEffect(() => {
+    if (activeTab === 'reviews') {
+      fetchReviews();
+    }
+  }, [reviewFilters, reviewCurrentPage, activeTab]);
 
   // Handle navigation state for activeTab
   useEffect(() => {
@@ -143,10 +176,17 @@ const AdminDashboard = () => {
       return;
     }
     
+    console.log('🔍 Current user:', user);
+    console.log('🔍 User role:', user.role);
+    console.log('🔍 Is authenticated:', isAuthenticated);
+    
     if (user.role !== 'admin' && user.role !== 'super_admin') {
+      console.log('❌ User does not have admin role, redirecting...');
       navigate('/dashboard');
       return;
     }
+    
+    console.log('✅ User has admin access');
   }, [isLoading, isAuthenticated, user, navigate]);
 
   // Close dropdown when clicking outside
@@ -283,12 +323,80 @@ const AdminDashboard = () => {
     { id: 'staff', label: 'Staff', icon: Shield },
     { id: 'payroll', label: 'Payroll', icon: DollarSign },
     { id: 'permissions', label: 'Permissions', icon: Settings },
+    { id: 'reviews', label: 'Reviews', icon: Star },
     { id: 'analytics', label: 'Analytics', icon: PieChart },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
   const handleTabClick = (tabId) => {
+    console.log('🖱️ Tab clicked:', tabId);
     setActiveTab(tabId);
+    
+    if (tabId === 'reviews') {
+      console.log('📊 Reviews tab clicked, fetching reviews...');
+      fetchReviews();
+      fetchReviewStats();
+    }
+  };
+
+  // Review management functions
+  const fetchReviews = async () => {
+    try {
+      console.log('🔍 Fetching reviews with params:', {
+        page: reviewCurrentPage,
+        limit: 20,
+        type: reviewFilters.type,
+        rating: reviewFilters.rating,
+        sortBy: reviewFilters.sortBy,
+        search: reviewFilters.search
+      });
+      
+      setReviewLoading(true);
+      const params = {
+        page: reviewCurrentPage,
+        limit: 20,
+        type: reviewFilters.type,
+        rating: reviewFilters.rating,
+        sortBy: reviewFilters.sortBy,
+        search: reviewFilters.search
+      };
+      
+      console.log('📡 Making API call to /admin/reviews with params:', params);
+      console.log('🔑 Auth token:', localStorage.getItem('token') ? 'Present' : 'Missing');
+      
+      const response = await api.get('/admin/reviews', { params });
+      console.log('✅ Reviews API response:', response.data);
+      console.log('📊 Reviews count:', response.data.data?.reviews?.length || 0);
+      
+      setReviews(response.data.data?.reviews || []);
+      setReviewPagination(response.data.data?.pagination || null);
+    } catch (error) {
+      console.error('❌ Error fetching reviews:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      toast.error('Failed to fetch reviews');
+      setReviews([]);
+      setReviewPagination(null);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const fetchReviewStats = async () => {
+    try {
+      console.log('📊 Fetching review statistics...');
+      const response = await api.get('/admin/reviews/stats');
+      console.log('✅ Review stats API response:', response.data);
+      setReviewStats(response.data.data);
+    } catch (error) {
+      console.error('❌ Error fetching review stats:', error);
+      console.error('❌ Error response:', error.response?.data);
+    }
+  };
+
+  const handleReviewFilterChange = (key, value) => {
+    setReviewFilters(prev => ({ ...prev, [key]: value }));
+    setReviewCurrentPage(1);
   };
 
   // Staff management functions
@@ -2417,6 +2525,313 @@ const AdminDashboard = () => {
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Reviews Management Tab */}
+            {activeTab === 'reviews' && (
+              <div className="space-y-8">
+                {/* Reviews Management Header */}
+                <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-2xl shadow-lg p-8 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-3xl font-bold mb-2">Review Management</h2>
+                      <p className="text-yellow-100 text-lg">
+                        Manage and moderate all platform reviews
+                      </p>
+                    </div>
+                    <div className="flex space-x-3">
+                      <button 
+                        onClick={() => handleGeneratePDFReport('reviews', '30d')}
+                        className="flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors"
+                      >
+                        <FileText className="h-5 w-5 mr-2" />
+                        Export Reviews
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Review Statistics Cards */}
+                {reviewStats && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="bg-white rounded-lg p-6 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Total Reviews</p>
+                          <p className="text-2xl font-bold text-gray-900">{reviewStats?.totalReviews || 0}</p>
+                        </div>
+                        <MessageSquare className="w-8 h-8 text-blue-500" />
+                      </div>
+                    </div>
+                    
+                    <div className="bg-white rounded-lg p-6 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Hotel Reviews</p>
+                          <p className="text-2xl font-bold text-gray-900">{reviewStats.hotelReviews?.total || 0}</p>
+                          <p className="text-sm text-gray-500">
+                            Avg: {reviewStats.hotelReviews?.averageRating?.toFixed(1) || '0.0'} ⭐
+                          </p>
+                        </div>
+                        <Building className="w-8 h-8 text-blue-500" />
+                      </div>
+                    </div>
+                    
+                    <div className="bg-white rounded-lg p-6 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Guide Reviews</p>
+                          <p className="text-2xl font-bold text-gray-900">{reviewStats.guideReviews?.total || 0}</p>
+                          <p className="text-sm text-gray-500">
+                            Avg: {reviewStats.guideReviews?.averageRating?.toFixed(1) || '0.0'} ⭐
+                          </p>
+                        </div>
+                        <User className="w-8 h-8 text-green-500" />
+                      </div>
+                    </div>
+                    
+                    <div className="bg-white rounded-lg p-6 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Custom Trip Reviews</p>
+                          <p className="text-2xl font-bold text-gray-900">{reviewStats.customTripReviews?.total || 0}</p>
+                          <p className="text-sm text-gray-500">
+                            Avg: {reviewStats.customTripReviews?.averageRating?.toFixed(1) || '0.0'} ⭐
+                          </p>
+                        </div>
+                        <MapPin className="w-8 h-8 text-purple-500" />
+                      </div>
+                    </div>
+                    
+                    <div className="bg-white rounded-lg p-6 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Vehicle Reviews</p>
+                          <p className="text-2xl font-bold text-gray-900">{reviewStats.vehicleReviews?.total || 0}</p>
+                          <p className="text-sm text-gray-500">
+                            Avg: {reviewStats.vehicleReviews?.averageRating?.toFixed(1) || '0.0'} ⭐
+                          </p>
+                        </div>
+                        <Car className="w-8 h-8 text-orange-500" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Filters and Search */}
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="flex flex-col lg:flex-row gap-4">
+                    {/* Search */}
+                    <div className="flex-1">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                        <input
+                          type="text"
+                          placeholder="Search reviews..."
+                          value={reviewFilters.search}
+                          onChange={(e) => handleReviewFilterChange('search', e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Filter Toggle */}
+                    <button
+                      onClick={() => setShowReviewFilters(!showReviewFilters)}
+                      className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <Filter className="w-5 h-5" />
+                      Filters
+                    </button>
+                  </div>
+
+                  {/* Filter Options */}
+                  {showReviewFilters && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+                        <select
+                          value={reviewFilters.type}
+                          onChange={(e) => handleReviewFilterChange('type', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="all">All Types</option>
+                          <option value="hotel">Hotel Reviews</option>
+                          <option value="guide">Guide Reviews</option>
+                          <option value="custom-trip">Custom Trip Reviews</option>
+                          <option value="vehicle">Vehicle Reviews</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
+                        <select
+                          value={reviewFilters.rating}
+                          onChange={(e) => handleReviewFilterChange('rating', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="all">All Ratings</option>
+                          <option value="5">5 Stars</option>
+                          <option value="4">4 Stars</option>
+                          <option value="3">3 Stars</option>
+                          <option value="2">2 Stars</option>
+                          <option value="1">1 Star</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                        <select
+                          value={reviewFilters.sortBy}
+                          onChange={(e) => handleReviewFilterChange('sortBy', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="newest">Newest First</option>
+                          <option value="oldest">Oldest First</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Reviews List */}
+                <div className="bg-white rounded-lg shadow-sm">
+                  {reviewLoading ? (
+                    <div className="p-8 text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                      <p className="mt-2 text-gray-600">Loading reviews...</p>
+                    </div>
+                  ) : reviews.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600">No reviews found</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-200">
+                      {reviews.map((review) => (
+                        <div key={`${review.reviewType}-${review.reviewId}`} className="p-6 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                {review.reviewType === 'hotel' && <Building className="w-4 h-4 text-blue-500" />}
+                                {review.reviewType === 'guide' && <User className="w-4 h-4 text-green-500" />}
+                                {review.reviewType === 'custom-trip' && <MapPin className="w-4 h-4 text-purple-500" />}
+                                {review.reviewType === 'vehicle' && <Car className="w-4 h-4 text-orange-500" />}
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  review.reviewType === 'hotel' ? 'bg-blue-100 text-blue-800' :
+                                  review.reviewType === 'guide' ? 'bg-green-100 text-green-800' :
+                                  review.reviewType === 'custom-trip' ? 'bg-purple-100 text-purple-800' :
+                                  'bg-orange-100 text-orange-800'
+                                }`}>
+                                  {review.reviewType?.replace('-', ' ').toUpperCase()}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <Star
+                                      key={star}
+                                      className={`w-4 h-4 ${
+                                        star <= (review.reviewType === 'hotel' ? review.rating?.overall || 0 : review.rating || 0)
+                                          ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                                      }`}
+                                    />
+                                  ))}
+                                  <span className="text-sm text-gray-600 ml-1">
+                                    ({(review.reviewType === 'hotel' ? review.rating?.overall || 0 : review.rating || 0)}/5)
+                                  </span>
+                                </div>
+                              </div>
+
+                              <h3 className="font-semibold text-gray-900 mb-1">
+                                {review.reviewType === 'hotel' ? review.hotel?.name || 'Hotel Review' :
+                                 review.reviewType === 'guide' ? review.tour?.title || review.guide?.firstName + ' ' + review.guide?.lastName || 'Guide Review' :
+                                 review.reviewType === 'custom-trip' ? review.customTrip?.title || 'Custom Trip Review' :
+                                 review.reviewType === 'vehicle' ? `${review.vehicle?.make || ''} ${review.vehicle?.model || ''} ${review.vehicle?.year || ''}` || 'Vehicle Review' :
+                                 'Review'}
+                              </h3>
+
+                              <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
+                                <div className="flex items-center gap-1">
+                                  <User className="w-4 h-4" />
+                                  {review.user?.firstName} {review.user?.lastName}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Clock className="w-4 h-4" />
+                                  {new Date(review.createdAt).toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </div>
+                              </div>
+
+                              <p className="text-gray-700 mb-3 line-clamp-2">
+                                {review.reviewType === 'hotel' ? review.content || '' : review.comment || ''}
+                              </p>
+
+                              {/* Review Details */}
+                              <div className="text-sm text-gray-600">
+                                {review.reviewType === 'hotel' && review.hotel && (
+                                  <p><strong>Hotel:</strong> {review.hotel.name}</p>
+                                )}
+                                {review.reviewType === 'guide' && review.guide && (
+                                  <p><strong>Guide:</strong> {review.guide.firstName} {review.guide.lastName}</p>
+                                )}
+                                {review.reviewType === 'custom-trip' && review.customTrip && (
+                                  <p><strong>Destination:</strong> {review.customTrip.destination}</p>
+                                )}
+                                {review.reviewType === 'vehicle' && review.vehicle && (
+                                  <div>
+                                    <p><strong>Vehicle:</strong> {review.vehicle.make} {review.vehicle.model} ({review.vehicle.year})</p>
+                                    <p><strong>License Plate:</strong> {review.vehicle.licensePlate}</p>
+                                    {review.driver && (
+                                      <p><strong>Driver:</strong> {review.driver.firstName} {review.driver.lastName}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Pagination */}
+                  {reviewPagination && reviewPagination.totalPages > 1 && (
+                    <div className="px-6 py-4 border-t border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-gray-700">
+                          Showing {((reviewPagination.currentPage - 1) * 20) + 1} to {Math.min(reviewPagination.currentPage * 20, reviewPagination.totalReviews)} of {reviewPagination.totalReviews} reviews
+                        </p>
+                        
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setReviewCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={!reviewPagination.hasPrev}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Previous
+                          </button>
+                          
+                          <span className="px-3 py-2 text-sm text-gray-700">
+                            Page {reviewPagination.currentPage} of {reviewPagination.totalPages}
+                          </span>
+                          
+                          <button
+                            onClick={() => setReviewCurrentPage(prev => Math.min(prev + 1, reviewPagination.totalPages))}
+                            disabled={!reviewPagination.hasNext}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

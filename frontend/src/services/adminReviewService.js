@@ -47,6 +47,27 @@ const adminReviewService = {
     }
   },
 
+  // Get all reviews with comprehensive data
+  getAllReviewsComprehensive: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      if (params.page) queryParams.append('page', params.page);
+      if (params.limit) queryParams.append('limit', params.limit);
+      if (params.type) queryParams.append('type', params.type);
+      if (params.status) queryParams.append('status', params.status);
+      if (params.rating) queryParams.append('rating', params.rating);
+      if (params.search) queryParams.append('search', params.search);
+      if (params.sortBy) queryParams.append('sortBy', params.sortBy);
+
+      const response = await api.get(`/admin/reviews?${queryParams.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting comprehensive reviews:', error);
+      throw error;
+    }
+  },
+
   // Delete review
   deleteReview: async (reviewId, reviewType) => {
     try {

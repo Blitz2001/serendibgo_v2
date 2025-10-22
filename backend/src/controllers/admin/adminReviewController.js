@@ -2,10 +2,12 @@ const asyncHandler = require('express-async-handler');
 const Review = require('../../models/Review');
 const HotelReview = require('../../models/hotels/HotelReview');
 const CustomTripReview = require('../../models/CustomTripReview');
+const VehicleBooking = require('../../models/vehicles/VehicleBooking');
 const User = require('../../models/User');
 const Hotel = require('../../models/hotels/Hotel');
 const CustomTrip = require('../../models/CustomTrip');
 const Tour = require('../../models/Tour');
+const Vehicle = require('../../models/Vehicle');
 
 // @desc    Get all reviews for admin dashboard
 // @route   GET /api/admin/reviews
@@ -122,6 +124,55 @@ const getAllReviews = asyncHandler(async (req, res) => {
       }
     }
 
+    if (type === 'vehicle' || type === 'all') {
+      // Build query for vehicle bookings with reviews
+      const vehicleQuery = {
+        ...baseQuery,
+        'review.rating': { $exists: true, $ne: null },
+        'review.comment': { $exists: true, $ne: '' }
+      };
+
+      // Adjust rating filter for vehicle reviews
+      if (rating !== 'all') {
+        vehicleQuery['review.rating'] = parseInt(rating);
+      }
+
+      const vehicleBookings = await VehicleBooking.find(vehicleQuery)
+        .populate('user', 'firstName lastName email avatar')
+        .populate('vehicle', 'make model year licensePlate')
+        .populate('driver.assignedDriver', 'firstName lastName email')
+        .sort(sortBy === 'newest' ? { 'review.reviewedAt': -1 } : { 'review.reviewedAt': 1 })
+        .skip(type === 'all' ? skip : 0)
+        .limit(type === 'all' ? limit : 0);
+
+      if (type === 'vehicle') {
+        reviews = vehicleBookings.map(booking => ({
+          ...booking.toObject(),
+          reviewType: 'vehicle',
+          reviewId: booking._id,
+          rating: booking.review?.rating,
+          comment: booking.review?.comment,
+          createdAt: booking.review?.reviewedAt || booking.createdAt,
+          user: booking.user,
+          vehicle: booking.vehicle,
+          driver: booking.driver?.assignedDriver
+        }));
+        totalCount = await VehicleBooking.countDocuments(vehicleQuery);
+      } else {
+        reviews = [...reviews, ...vehicleBookings.map(booking => ({
+          ...booking.toObject(),
+          reviewType: 'vehicle',
+          reviewId: booking._id,
+          rating: booking.review?.rating,
+          comment: booking.review?.comment,
+          createdAt: booking.review?.reviewedAt || booking.createdAt,
+          user: booking.user,
+          vehicle: booking.vehicle,
+          driver: booking.driver?.assignedDriver
+        }))];
+      }
+    }
+
     // Sort combined results if type is 'all'
     if (type === 'all') {
       reviews.sort((a, b) => {
@@ -141,7 +192,12 @@ const getAllReviews = asyncHandler(async (req, res) => {
       const hotelCount = await HotelReview.countDocuments(baseQuery);
       const guideCount = await Review.countDocuments(baseQuery);
       const customTripCount = await CustomTripReview.countDocuments(baseQuery);
-      totalCount = hotelCount + guideCount + customTripCount;
+      const vehicleCount = await VehicleBooking.countDocuments({
+        ...baseQuery,
+        'review.rating': { $exists: true, $ne: null },
+        'review.comment': { $exists: true, $ne: '' }
+      });
+      totalCount = hotelCount + guideCount + customTripCount + vehicleCount;
     }
 
     // Get review statistics
@@ -239,6 +295,20 @@ const calculateReviewStatistics = async () => {
     ]);
     console.log('Custom trip stats:', customTripStats);
 
+    // Vehicle booking reviews stats
+    const vehicleStats = await VehicleBooking.aggregate([
+      { $match: { 'review.rating': { $exists: true, $ne: null } } },
+      { $group: {
+        _id: null,
+        total: { $sum: 1 },
+        averageRating: { $avg: '$review.rating' },
+        ratingDistribution: {
+          $push: '$review.rating'
+        }
+      }}
+    ]);
+    console.log('Vehicle stats:', vehicleStats);
+
     // Calculate rating distribution
     const calculateRatingDistribution = (ratings) => {
       const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
@@ -255,9 +325,10 @@ const calculateReviewStatistics = async () => {
     const hotelDistribution = hotelStats[0] ? calculateRatingDistribution(hotelStats[0].ratingDistribution) : { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
     const guideDistribution = guideStats[0] ? calculateRatingDistribution(guideStats[0].ratingDistribution) : { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
     const customTripDistribution = customTripStats[0] ? calculateRatingDistribution(customTripStats[0].ratingDistribution) : { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    const vehicleDistribution = vehicleStats[0] ? calculateRatingDistribution(vehicleStats[0].ratingDistribution) : { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
 
     const result = {
-      totalReviews: (hotelStats[0]?.total || 0) + (guideStats[0]?.total || 0) + (customTripStats[0]?.total || 0),
+      totalReviews: (hotelStats[0]?.total || 0) + (guideStats[0]?.total || 0) + (customTripStats[0]?.total || 0) + (vehicleStats[0]?.total || 0),
       hotelReviews: {
         total: hotelStats[0]?.total || 0,
         averageRating: hotelStats[0]?.averageRating || 0,
@@ -272,6 +343,11 @@ const calculateReviewStatistics = async () => {
         total: customTripStats[0]?.total || 0,
         averageRating: customTripStats[0]?.averageRating || 0,
         ratingDistribution: customTripDistribution
+      },
+      vehicleReviews: {
+        total: vehicleStats[0]?.total || 0,
+        averageRating: vehicleStats[0]?.averageRating || 0,
+        ratingDistribution: vehicleDistribution
       }
     };
     
@@ -283,7 +359,8 @@ const calculateReviewStatistics = async () => {
       totalReviews: 0,
       hotelReviews: { total: 0, averageRating: 0, ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } },
       guideReviews: { total: 0, averageRating: 0, ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } },
-      customTripReviews: { total: 0, averageRating: 0, ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } }
+      customTripReviews: { total: 0, averageRating: 0, ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } },
+      vehicleReviews: { total: 0, averageRating: 0, ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } }
     };
   }
 };
@@ -308,6 +385,9 @@ const updateReviewStatus = asyncHandler(async (req, res) => {
         break;
       case 'custom-trip':
         review = await CustomTripReview.findById(reviewId);
+        break;
+      case 'vehicle':
+        review = await VehicleBooking.findById(reviewId);
         break;
       default:
         return res.status(400).json({
@@ -375,6 +455,9 @@ const deleteReview = asyncHandler(async (req, res) => {
         break;
       case 'custom-trip':
         review = await CustomTripReview.findById(reviewId);
+        break;
+      case 'vehicle':
+        review = await VehicleBooking.findById(reviewId);
         break;
       default:
         return res.status(400).json({
